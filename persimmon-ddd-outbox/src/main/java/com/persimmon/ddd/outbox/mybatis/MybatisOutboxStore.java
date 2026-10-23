@@ -8,7 +8,7 @@ import java.time.Instant;
 import java.util.List;
 import org.springframework.transaction.annotation.Transactional;
 
-/** The three tables behind the outbox. Column names are the SQL ones; see {@code persimmon/db/outbox}. */
+/** The three tables behind the outbox. Column names are the SQL ones; see {@code persimmon/db/migration/outbox}. */
 public class MybatisOutboxStore implements OutboxStore {
   private final OutboxMapper outbox;
   private final DeadLetterMapper deadLetters;

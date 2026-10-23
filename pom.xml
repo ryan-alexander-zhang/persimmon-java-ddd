@@ -19,6 +19,7 @@
     <module>persimmon-ddd-spring-boot-starter</module>
     <module>persimmon-ddd-outbox</module>
     <module>persimmon-ddd-archunit</module>
+    <module>persimmon-ddd-flyway</module>
     <module>persimmon-ddd-bom</module>
   </modules>
 

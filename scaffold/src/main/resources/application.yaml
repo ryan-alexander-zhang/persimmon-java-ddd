@@ -3,12 +3,6 @@ spring:
     name: ordering
   datasource:
     url: jdbc:h2:mem:ordering;DB_CLOSE_DELAY=-1
-  sql:
-    init:
-      mode: always
-      schema-locations:
-        - classpath:schema.sql
-        - classpath:persimmon/db/outbox/postgresql.sql
 persimmon:
   ddd:
     outbox:

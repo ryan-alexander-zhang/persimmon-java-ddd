@@ -53,6 +53,15 @@
       <artifactId>persimmon-ddd-outbox</artifactId>
     </dependency>
     <dependency>
+      <groupId>com.persimmon.ddd</groupId>
+      <artifactId>persimmon-ddd-flyway</artifactId>
+    </dependency>
+    <!-- Add flyway-database-postgresql or flyway-mysql with the matching driver. -->
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>
     </dependency>

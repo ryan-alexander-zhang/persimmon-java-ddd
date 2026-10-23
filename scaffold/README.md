@@ -20,6 +20,7 @@ curl -X POST localhost:8080/orders -H 'content-type: application/json' \
   -d '{"customerId":"c-1","lines":[{"sku":"A","quantity":2}]}'
 ```
 
-To go to PostgreSQL or MySQL: swap the H2 dependency for the driver, point `spring.datasource` at
-it, and run `schema.sql` plus `persimmon/db/outbox/<dialect>.sql` with your migration tool instead
-of `spring.sql.init`.
+Schema: your tables are Flyway migrations under `db/migration`; the persimmon tables apply
+themselves after yours through `persimmon-ddd-flyway`. To go to PostgreSQL or MySQL, swap the H2
+dependency for the driver plus `flyway-database-postgresql` or `flyway-mysql`, and point
+`spring.datasource` at it.

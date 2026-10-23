@@ -11,6 +11,7 @@ time. Group id `com.persimmon.ddd`.
 | `persimmon-ddd-persistence-mybatis-plus` | `MybatisPlusAggregateRepository`: whole-row save with optimistic locking, events published after save; assembles `MybatisPlusInterceptor` from `InnerInterceptor` beans | application, MyBatis-Plus |
 | `persimmon-ddd-spring-boot-starter` | Auto-configures `CommandBus`/`QueryBus` from handler beans, logging + validation + transaction interceptors, `UnitOfWork`, Spring-event `DomainEvents`, UUIDv7 `IdGenerator` | application, Spring Boot |
 | `persimmon-ddd-outbox` | Transactional outbox: `IntegrationEvents` writes a row with the command, a leased relay delivers it in process (or to a broker module), retries with backoff, dead-letters, replays, inbox dedup, optional cleanup; SQL under `persimmon/db/outbox/` | application, MyBatis-Plus starter |
+| `persimmon-ddd-flyway` | Applies every module's `persimmon/db/migration/<component>/<vendor>` through Flyway after the application's own migrations, one history table per component | Flyway |
 | `persimmon-ddd-archunit` | `PersimmonDddRules.all()` plus one rule per concern, for a project's own ArchUnit test | application, ArchUnit (test scope in consumers) |
 | `persimmon-ddd-bom` | Versions of the modules above, nothing else | |
 
@@ -90,9 +91,15 @@ it with `mvn test -f scaffold/pom.xml` after `mvn install` here.
 - Dead-letter reasons and replay stay; the dead-letter listing API, `EventDestinations`,
   `EventUpcaster`, observability hooks, `traceparent` columns and the tenant column are out.
   The `destination` column stays so a broker module can route rows written before it arrived.
-- Schema ships as one SQL file per dialect (`postgresql.sql` also runs on H2, `mysql.sql`),
-  not as a Flyway history; run it with the project's migration tool.
+- Schema ships as Flyway migrations under `persimmon/db/migration/outbox/{postgresql,mysql,h2}`;
+  `persimmon-ddd-flyway` applies them, or point your own tool at them.
 - Not yet ported: Kafka dispatcher and consumer bridge (`messaging-kafka`), `publishAs`.
+
+## Changes from `aipersimmon-ddd-flyway-spring-boot-starter`
+
+- Every component found on the classpath is applied; no `components` allow-list. A module you
+  do not want is a module you do not depend on. `persimmon.ddd.flyway.enabled=false` opts out.
+- No properties class: history table prefix and baseline are fixed.
 
 ## Changes from `aipersimmon-ddd-archunit`, `aipersimmon-ddd-test`, `aipersimmon-ddd-test-support`
 
@@ -115,8 +122,8 @@ it with `mvn test -f scaffold/pom.xml` after `mvn install` here.
   five modules plus a process manager. The ArchUnit rules are package based, so the layering is
   enforced just the same; split into modules when a context needs its own deployable.
 - Inherits `spring-boot-starter-parent` and imports `persimmon-ddd-bom`; no quality-plugin block.
-- H2 out of the box, `spring.sql.init` for the schema; no Flyway, Kafka, Postgres compose file or
-  OpenTelemetry wiring.
+- H2 out of the box, Flyway for the schema; no Kafka, Postgres compose file or OpenTelemetry
+  wiring.
 - Not an archetype yet; `persimmon create` copies and renames it.
 
 ## Build

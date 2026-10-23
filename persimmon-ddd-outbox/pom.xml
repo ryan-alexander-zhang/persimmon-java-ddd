@@ -16,9 +16,10 @@
   <description>Transactional outbox and inbox for integration events, with in-process delivery by default.</description>
 
   <dependencies>
+    <!-- The starter supplies the IdGenerator, UnitOfWork and buses the outbox writes under. -->
     <dependency>
       <groupId>com.persimmon.ddd</groupId>
-      <artifactId>persimmon-ddd-application</artifactId>
+      <artifactId>persimmon-ddd-spring-boot-starter</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
@@ -47,12 +48,6 @@
       <optional>true</optional>
     </dependency>
 
-    <dependency>
-      <groupId>com.persimmon.ddd</groupId>
-      <artifactId>persimmon-ddd-spring-boot-starter</artifactId>
-      <version>${project.version}</version>
-      <scope>test</scope>
-    </dependency>
     <dependency>
       <groupId>com.h2database</groupId>
       <artifactId>h2</artifactId>
