@@ -12,6 +12,7 @@ time. Group id `com.persimmon.ddd`.
 | `persimmon-ddd-spring-boot-starter` | Auto-configures `CommandBus`/`QueryBus` from handler beans, logging + validation + transaction interceptors, `UnitOfWork`, Spring-event `DomainEvents`, UUIDv7 `IdGenerator` | application, Spring Boot |
 | `persimmon-ddd-outbox` | Transactional outbox: `IntegrationEvents` writes a row with the command, a leased relay delivers it in process (or to a broker module), retries with backoff, dead-letters, replays, inbox dedup, optional cleanup; SQL under `persimmon/db/outbox/` | application, MyBatis-Plus starter |
 | `persimmon-ddd-archunit` | `PersimmonDddRules.all()` plus one rule per concern, for a project's own ArchUnit test | application, ArchUnit (test scope in consumers) |
+| `persimmon-ddd-bom` | Versions of the modules above, nothing else | |
 
 ## Changes from `aipersimmon-ddd-core`
 
