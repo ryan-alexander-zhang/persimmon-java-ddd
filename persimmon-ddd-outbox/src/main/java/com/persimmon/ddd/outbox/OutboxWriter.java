@@ -6,6 +6,7 @@ import com.persimmon.ddd.application.CommandContext;
 import com.persimmon.ddd.application.EventType;
 import com.persimmon.ddd.application.IntegrationEvent;
 import com.persimmon.ddd.application.IntegrationEvents;
+import com.persimmon.ddd.application.TenantContext;
 import com.persimmon.ddd.core.IdGenerator;
 import java.time.Clock;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -52,6 +53,9 @@ public class OutboxWriter implements IntegrationEvents {
             context.correlationId(),
             context.messageId(),
             IntegrationEvent.destinationOf(event.getClass()).orElse(null),
+            TenantContext.effective().value(),
+            null,
+            null,
             0),
         clock.instant());
   }

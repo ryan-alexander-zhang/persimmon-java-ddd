@@ -12,6 +12,8 @@ import com.persimmon.ddd.application.EventType;
 import com.persimmon.ddd.application.Externalized;
 import com.persimmon.ddd.application.IntegrationEvent;
 import com.persimmon.ddd.application.IntegrationEvents;
+import com.persimmon.ddd.application.TenantContext;
+import com.persimmon.ddd.application.TenantId;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -45,6 +47,7 @@ class OutboxTest {
   @EnableAutoConfiguration
   static class App {
     final List<EventEnvelope<OrderPlaced>> received = new ArrayList<>();
+    final List<TenantId> tenants = new ArrayList<>();
     RuntimeException failWith;
 
     @EventListener
@@ -53,6 +56,7 @@ class OutboxTest {
         throw failWith;
       }
       received.add(envelope);
+      tenants.add(TenantContext.effective());
     }
   }
 
@@ -69,6 +73,7 @@ class OutboxTest {
       jdbc.update("DELETE FROM " + table);
     }
     app.received.clear();
+    app.tenants.clear();
     app.failWith = null;
   }
 
@@ -100,6 +105,15 @@ class OutboxTest {
     assertEquals("o-1", envelope.subject());
     assertEquals(true, row("persimmon_outbox", "id").get("SENT"));
     assertEquals(0, relay.relay(), "nothing left to relay");
+  }
+
+  @Test
+  void theRowCarriesTheWritersTenantAndTheListenerRunsUnderIt() {
+    TenantContext.runAs(TenantId.of("acme"), () -> publish(new OrderPlaced("o-1", 1)));
+    assertEquals("acme", row("persimmon_outbox", "id").get("TENANT_ID"));
+    relay.relay();
+    assertEquals(List.of(TenantId.of("acme")), app.tenants);
+    assertEquals("acme", app.received.get(0).tenantId());
   }
 
   @Test

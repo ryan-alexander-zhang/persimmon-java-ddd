@@ -10,6 +10,7 @@ public record EventEnvelope<T extends IntegrationEvent>(
     int version,
     Instant occurredAt,
     String subject,
+    String tenantId,
     String correlationId,
     String causationId,
     T payload) {}

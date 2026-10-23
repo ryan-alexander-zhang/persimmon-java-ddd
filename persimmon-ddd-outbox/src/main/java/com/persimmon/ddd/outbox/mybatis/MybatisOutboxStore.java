@@ -99,7 +99,7 @@ public class MybatisOutboxStore implements OutboxStore {
         new OutboxMessage(
             dead.getEventId(), dead.getSource(), dead.getType(), dead.getVersion(), dead.getPayload(),
             dead.getOccurredAt(), dead.getSubject(), dead.getCorrelationId(), dead.getCausationId(),
-            dead.getDestination(), 0),
+            dead.getDestination(), dead.getTenantId(), dead.getTraceparent(), dead.getTracestate(), 0),
         now);
     deadLetters.deleteById(dead.getId());
     return true;
@@ -146,6 +146,9 @@ public class MybatisOutboxStore implements OutboxStore {
     row.setCorrelationId(m.correlationId());
     row.setCausationId(m.causationId());
     row.setDestination(m.destination());
+    row.setTenantId(m.tenantId());
+    row.setTraceparent(m.traceparent());
+    row.setTracestate(m.tracestate());
   }
 
   private static void copy(OutboxMessage m, DeadLetterRecord row) {
@@ -159,11 +162,15 @@ public class MybatisOutboxStore implements OutboxStore {
     row.setCorrelationId(m.correlationId());
     row.setCausationId(m.causationId());
     row.setDestination(m.destination());
+    row.setTenantId(m.tenantId());
+    row.setTraceparent(m.traceparent());
+    row.setTracestate(m.tracestate());
   }
 
   private static OutboxMessage toMessage(OutboxRecord r) {
     return new OutboxMessage(
         r.getEventId(), r.getSource(), r.getType(), r.getVersion(), r.getPayload(), r.getOccurredAt(),
-        r.getSubject(), r.getCorrelationId(), r.getCausationId(), r.getDestination(), r.getAttempts());
+        r.getSubject(), r.getCorrelationId(), r.getCausationId(), r.getDestination(), r.getTenantId(),
+        r.getTraceparent(), r.getTracestate(), r.getAttempts());
   }
 }

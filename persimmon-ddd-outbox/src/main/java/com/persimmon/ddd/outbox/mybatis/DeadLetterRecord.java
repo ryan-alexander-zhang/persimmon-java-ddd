@@ -20,6 +20,9 @@ public class DeadLetterRecord {
   private String correlationId;
   private String causationId;
   private String destination;
+  private String tenantId;
+  private String traceparent;
+  private String tracestate;
   private Integer attempts;
   private String reason;
   private String lastError;
@@ -111,6 +114,30 @@ public class DeadLetterRecord {
 
   public void setDestination(String destination) {
     this.destination = destination;
+  }
+
+  public String getTenantId() {
+    return tenantId;
+  }
+
+  public void setTenantId(String tenantId) {
+    this.tenantId = tenantId;
+  }
+
+  public String getTraceparent() {
+    return traceparent;
+  }
+
+  public void setTraceparent(String traceparent) {
+    this.traceparent = traceparent;
+  }
+
+  public String getTracestate() {
+    return tracestate;
+  }
+
+  public void setTracestate(String tracestate) {
+    this.tracestate = tracestate;
   }
 
   public Integer getAttempts() {

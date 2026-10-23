@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.persimmon.ddd.application.EventEnvelope;
 import com.persimmon.ddd.application.IntegrationEvent;
+import com.persimmon.ddd.application.TenantContext;
+import com.persimmon.ddd.application.TenantId;
 import java.time.Clock;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.PayloadApplicationEvent;
@@ -13,7 +15,7 @@ import org.springframework.transaction.support.TransactionOperations;
 /**
  * Delivers to this process's {@code @EventListener}s as an {@code EventEnvelope<T>}, inside one
  * transaction with the inbox check, so a redelivered row is skipped and a failed delivery leaves
- * no inbox record behind.
+ * no inbox record behind. Listeners run under the tenant the row was written for.
  */
 public class InProcessOutboxDispatcher implements OutboxDispatcher {
   private final ApplicationEventPublisher publisher;
@@ -69,15 +71,19 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
             message.version(),
             message.occurredAt(),
             message.subject(),
+            message.tenantId(),
             message.correlationId(),
             message.causationId(),
             payload);
     ResolvableType eventType = ResolvableType.forClassWithGenerics(EventEnvelope.class, type);
-    transactions.executeWithoutResult(
-        status -> {
-          if (!store.seenBefore(consumer, message.source(), message.eventId(), clock.instant())) {
-            publisher.publishEvent(new PayloadApplicationEvent<>(this, envelope, eventType));
-          }
-        });
+    TenantContext.runAs(
+        new TenantId(message.tenantId()),
+        () ->
+            transactions.executeWithoutResult(
+                status -> {
+                  if (!store.seenBefore(consumer, message.source(), message.eventId(), clock.instant())) {
+                    publisher.publishEvent(new PayloadApplicationEvent<>(this, envelope, eventType));
+                  }
+                }));
   }
 }
