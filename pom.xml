@@ -17,6 +17,7 @@
     <module>persimmon-ddd-web</module>
     <module>persimmon-ddd-persistence-mybatis-plus</module>
     <module>persimmon-ddd-spring-boot-starter</module>
+    <module>persimmon-ddd-outbox</module>
   </modules>
 
   <properties>

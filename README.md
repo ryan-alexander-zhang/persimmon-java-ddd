@@ -10,6 +10,7 @@ time. Group id `com.persimmon.ddd`.
 | `persimmon-ddd-web` | Spring Boot auto-configuration: RFC 9457 problem details for every `DomainException`, `ProblemCatalog` overrides per code, `X-Request-Id` filter, `Cursor` as a JSON string | application, Spring MVC |
 | `persimmon-ddd-persistence-mybatis-plus` | `MybatisPlusAggregateRepository`: whole-row save with optimistic locking, events published after save; assembles `MybatisPlusInterceptor` from `InnerInterceptor` beans | application, MyBatis-Plus |
 | `persimmon-ddd-spring-boot-starter` | Auto-configures `CommandBus`/`QueryBus` from handler beans, logging + validation + transaction interceptors, `UnitOfWork`, Spring-event `DomainEvents`, UUIDv7 `IdGenerator` | application, Spring Boot |
+| `persimmon-ddd-outbox` | Transactional outbox: `IntegrationEvents` writes a row with the command, a leased relay delivers it in process (or to a broker module), retries with backoff, dead-letters, replays, inbox dedup, optional cleanup; SQL under `persimmon/db/outbox/` | application, MyBatis-Plus starter |
 
 ## Changes from `aipersimmon-ddd-core`
 
@@ -70,6 +71,20 @@ time. Group id `com.persimmon.ddd`.
   exceptions itself), `PrecheckCommandInterceptor`, `RetryOnConflictCommandInterceptor`
   (opt-in feature, add back when a project turns it on), in-process `IntegrationEvents` (moves
   with the integration component).
+
+## Changes from `aipersimmon-ddd-integration` + `outbox` + `outbox-engine` + `outbox-mybatis-plus` + `outbox-spring-boot-starter` + `inbox` + `inbox-mybatis-plus`
+
+- Seven modules become one (`persimmon-ddd-outbox`) plus five contract types in `application`.
+  One `OutboxStore` covers the outbox, dead-letter and inbox tables; one MyBatis implementation.
+- Dispatch is synchronous per message; no `InFlightDispatch` handles, no poll time budget, no
+  explicit release: a lease that is not cleared expires on its own.
+- No ShedLock. Cleanup is a bounded `DELETE` that is safe to run on every instance.
+- Dead-letter reasons and replay stay; the dead-letter listing API, `EventDestinations`,
+  `EventUpcaster`, observability hooks, `traceparent` columns and the tenant column are out.
+  The `destination` column stays so a broker module can route rows written before it arrived.
+- Schema ships as one SQL file per dialect (`postgresql.sql` also runs on H2, `mysql.sql`),
+  not as a Flyway history; run it with the project's migration tool.
+- Not yet ported: Kafka dispatcher and consumer bridge (`messaging-kafka`), `publishAs`.
 
 ## Build
 
