@@ -1,18 +1,32 @@
-# ordering-service
+# example-app
 
-A persimmon-ddd service with one bounded context, `ordering`, one Maven module per layer. The
-module graph is the dependency rule: what is not on a module's classpath cannot be imported.
+A persimmon-ddd modular monolith. Each bounded context is a directory of five Maven modules, one
+per layer; `start` assembles them into one deployable. What is not on a module's classpath cannot
+be imported, so the layer arrows and the context boundaries hold at compile time.
 
-| Module | Holds | Depends on |
-|---|---|---|
-| `ordering-domain` | `Order` aggregate, value objects, domain events, error codes, the `Orders` port | persimmon-ddd-core only |
-| `ordering-api` | Integration events other contexts consume | persimmon-ddd-application |
-| `ordering-application` | Commands, queries, their handlers, read models, domain event handlers | domain, api |
-| `ordering-infrastructure` | MyBatis rows, mappers, the `Orders` implementation, read-side queries | application, persimmon-ddd-persistence-mybatis-plus |
-| `ordering-adapter` | REST controller, integration event listeners | application, Spring MVC |
-| `ordering-start` | `OrderingApplication`, configuration, migrations, the persimmon starters, the tests | all of the above |
+```text
+example-app/
+  ordering/                     the sample context
+    ordering-domain/            Order aggregate, value objects, domain events, error codes, the Orders port   -> persimmon-ddd-core only
+    ordering-api/               integration events (and interfaces) other contexts may use                   -> persimmon-ddd-application
+    ordering-application/       commands, queries, handlers, read models, domain event handlers              -> domain, api
+    ordering-infrastructure/    MyBatis rows and mappers, Orders implementation, db/migration/ordering/      -> application, persimmon-ddd-persistence-mybatis-plus
+    ordering-adapter/           REST controller, integration event listeners                                 -> application, Spring MVC
+  start/                        Application, application.yaml, the persimmon starters, ArchitectureTest, OrderingFlowTest
+  _context/                     the empty context `persimmon new --context <name>` copies; not a module
+```
 
-`ArchitectureTest` in `ordering-start` checks the rules inside the packages. `OrderingFlowTest` drives the whole thing on H2:
+Rules a second context lives by, all checked by `ArchitectureTest`:
+
+- a context depends on another only through that context's `-api` module: integration events and,
+  for synchronous calls, an interface plus DTOs the provider implements as a bean;
+- a context owns its tables and its migrations (`db/migration/<context>/V<yyyyMMddNNN>__*.sql`);
+  no cross-context joins;
+- contexts talk through integration events on the outbox. In one process they are delivered in
+  process; the day a context becomes a service, `persimmon.ddd.outbox.routes` sends its events to
+  a broker and that context gets a `start` of its own. No code changes.
+
+`OrderingFlowTest` drives the whole thing on H2:
 place, read, confirm (twice with one `Idempotency-Key`), conflict, validation, not-found, and the
 outbox relaying `OrderConfirmedEvent`.
 
@@ -31,7 +45,7 @@ package. Once per machine, put a server with id `github` in `~/.m2/settings.xml`
 
 ```
 mvn test
-mvn spring-boot:run -pl ordering-start   # Swagger UI at /swagger-ui.html, spec at /v3/api-docs
+mvn spring-boot:run -pl start            # Swagger UI at /swagger-ui.html, spec at /v3/api-docs
 curl -X POST localhost:8080/orders -H 'content-type: application/json' \
   -d '{"customerId":"c-1","lines":[{"sku":"A","quantity":2}]}'
 ```

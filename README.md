@@ -20,8 +20,9 @@ time. Group id `com.persimmon.ddd`.
 
 ## Scaffold
 
-`scaffold/` is a complete service (`com.example:ordering-service`, one Maven module per layer of
-one bounded context) built on the modules above: what `persimmon new` copies. It is not part of this reactor; build
+`scaffold/` is a complete modular monolith (`com.example:example-app`: the `ordering` context in
+five modules, one per layer, plus `start`, plus the empty context under `_context/`) built on the
+modules above: what `persimmon new` and `persimmon new --context` copy. It is not part of this reactor; build
 it with `mvn test -f scaffold/pom.xml` after `mvn install` here.
 
 ## Changes from `aipersimmon-ddd-core`
@@ -149,9 +150,9 @@ it with `mvn test -f scaffold/pom.xml` after `mvn install` here.
 
 ## Changes from `aipersimmon-ddd-scaffold/multi-module`
 
-- One bounded context in six modules (`api`, `domain`, `application`, `infrastructure`,
-  `adapter`, `start`) instead of three contexts plus a process-manager module; the module graph
-  enforces the layer dependencies at compile time and ArchUnit the rules inside the packages.
+- One sample context in five modules plus `start`, and an empty context template, instead of
+  three worked contexts plus a process-manager module; the module graph enforces the layer and
+  context dependencies at compile time and ArchUnit the rules inside the packages.
 - Inherits `spring-boot-starter-parent` and imports `persimmon-ddd-bom`; no quality-plugin block.
 - H2 out of the box, Flyway for the schema; no Kafka, Postgres compose file or OpenTelemetry
   wiring.

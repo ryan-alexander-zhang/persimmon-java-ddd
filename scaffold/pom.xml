@@ -12,25 +12,24 @@
   </parent>
 
   <!--
-    One bounded context, one Maven module per layer. The module graph is the dependency rule:
+    A modular monolith. Each bounded context is a directory of five modules, one per layer:
     domain -> nothing; api -> nothing; application -> domain, api; infrastructure and adapter ->
-    application; start -> all of them. A layer that is not on a module's classpath cannot be
-    imported, and the ArchUnit test in start checks the finer rules inside the packages.
+    application. A context may depend on another context's -api module only. start assembles
+    every context into one deployable; a context that moves to its own service takes its directory
+    and gets a start of its own. The module graph enforces the arrows at compile time; the ArchUnit
+    test in start checks the rules inside the packages. persimmon new with the context flag adds one.
   -->
   <groupId>com.example</groupId>
-  <artifactId>ordering-service</artifactId>
+  <artifactId>example-app</artifactId>
   <version>0.0.1-SNAPSHOT</version>
   <packaging>pom</packaging>
-  <name>ordering-service</name>
-  <description>A persimmon-ddd service: one bounded context, one module per layer.</description>
+  <name>example-app</name>
+  <description>A persimmon-ddd application: bounded contexts side by side, each one module per layer, any of them ready to leave.</description>
 
   <modules>
-    <module>ordering-domain</module>
-    <module>ordering-api</module>
-    <module>ordering-application</module>
-    <module>ordering-infrastructure</module>
-    <module>ordering-adapter</module>
-    <module>ordering-start</module>
+    <module>ordering</module>
+    <!-- contexts -->
+    <module>start</module>
   </modules>
 
   <properties>
