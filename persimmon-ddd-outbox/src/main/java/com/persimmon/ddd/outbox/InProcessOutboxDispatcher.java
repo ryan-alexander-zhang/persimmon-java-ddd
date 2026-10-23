@@ -15,7 +15,9 @@ import org.springframework.transaction.support.TransactionOperations;
 /**
  * Delivers to this process's {@code @EventListener}s as an {@code EventEnvelope<T>}, inside one
  * transaction with the inbox check, so a redelivered row is skipped and a failed delivery leaves
- * no inbox record behind. Listeners run under the tenant the row was written for.
+ * no inbox record behind. Listeners run under the tenant the row was written for; registered
+ * upcasters move an older payload to the newest version first. A broker module hands records it
+ * received to {@link #dispatch} too, so both legs deliver the same way.
  */
 public class InProcessOutboxDispatcher implements OutboxDispatcher {
   private final ApplicationEventPublisher publisher;
@@ -25,6 +27,7 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
   private final TransactionOperations transactions;
   private final Clock clock;
   private final String consumer;
+  private final Upcasters upcasters;
 
   public InProcessOutboxDispatcher(
       ApplicationEventPublisher publisher,
@@ -33,7 +36,8 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
       OutboxStore store,
       TransactionOperations transactions,
       Clock clock,
-      String consumer) {
+      String consumer,
+      Upcasters upcasters) {
     this.publisher = publisher;
     this.json = json;
     this.catalog = catalog;
@@ -41,6 +45,12 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
     this.transactions = transactions;
     this.clock = clock;
     this.consumer = consumer;
+    this.upcasters = upcasters;
+  }
+
+  /** Whether this process has a class for the contract; a broker consumer skips what it has none for. */
+  public boolean knows(String type, int version) {
+    return catalog.lookup(type, version).isPresent();
   }
 
   @Override
@@ -59,23 +69,24 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
                         "no local class for " + message.type() + " v" + message.version()));
     IntegrationEvent payload;
     try {
-      payload = json.readValue(message.payload(), type);
+      payload = upcasters.apply(json.readValue(message.payload(), type));
     } catch (JsonProcessingException e) {
       throw new PermanentDispatchException("unreadable payload of " + message.eventId() + ": " + e);
     }
+    Class<? extends IntegrationEvent> delivered = payload.getClass();
     EventEnvelope<IntegrationEvent> envelope =
         new EventEnvelope<>(
             message.eventId(),
             message.source(),
             message.type(),
-            message.version(),
+            delivered == type ? message.version() : IntegrationEvent.contractOf(delivered).version(),
             message.occurredAt(),
             message.subject(),
             message.tenantId(),
             message.correlationId(),
             message.causationId(),
             payload);
-    ResolvableType eventType = ResolvableType.forClassWithGenerics(EventEnvelope.class, type);
+    ResolvableType eventType = ResolvableType.forClassWithGenerics(EventEnvelope.class, delivered);
     TenantContext.runAs(
         new TenantId(message.tenantId()),
         () ->

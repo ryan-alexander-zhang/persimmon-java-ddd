@@ -15,6 +15,7 @@ time. Group id `com.persimmon.ddd`.
 | `persimmon-ddd-openapi` | springdoc with the `ProblemDetail` schema and the default problem responses attached to every operation | web, springdoc |
 | `persimmon-ddd-tenancy` | Off until `persimmon.ddd.tenancy.enabled=true`: tenant per request into `TenantContext`, listed tables scoped by `tenant_id` in SQL, a guard for tables nobody decided about | persistence-mybatis-plus, Spring MVC |
 | `persimmon-ddd-idempotency` | `Idempotency-Key` filter for unsafe methods: first call runs, same-body retries replay the stored response, different body is 422, in flight is 409; MyBatis-Plus store, migrations under `persimmon/db/migration/idempotency/` | web, persistence-mybatis-plus |
+| `persimmon-ddd-kafka` | Kafka as the transport of routed events: the relay produces CloudEvents-style records to the routed topic, the inbound bridge consumes the configured topics into the same `@EventListener`s with the same inbox dedup, tenant and trace; upcasters move old versions forward; permanent failures go to `<topic>.DLT` | outbox, spring-kafka |
 | `persimmon-ddd-archunit` | `PersimmonDddRules.all()` plus one rule per concern, for a project's own ArchUnit test | application, ArchUnit (test scope in consumers) |
 | `persimmon-ddd-bom` | Versions of the modules above, nothing else | |
 
@@ -102,7 +103,21 @@ it with `mvn test -f scaffold/pom.xml` after `mvn install` here.
   Boot's auto-instrumentation covers HTTP, JDBC and messaging.
 - Schema ships as Flyway migrations under `persimmon/db/migration/outbox/{postgresql,mysql,h2}`;
   `persimmon-ddd-flyway` applies them, or point your own tool at them.
-- Not yet ported: Kafka dispatcher and consumer bridge (`messaging-kafka`), `publishAs`.
+- `publishAs` is not ported.
+
+## Changes from `aipersimmon-ddd-messaging-kafka`
+
+- One dispatcher: a row with a destination goes to that topic, one without stays in process. No
+  `RoutingOutboxDispatcher`, no annotation scan for topics, no startup guards; routes are the
+  outbox's `persimmon.ddd.outbox.routes`.
+- The inbound bridge builds an `OutboxMessage` from the record and hands it to the in-process
+  dispatcher, so Kafka and in-process delivery share one code path, including upcasters, which
+  now live in the outbox module and apply to both legs.
+- A record whose type this process has no class for is skipped, not dead-lettered; `skip-locally-unhandled`
+  and its handler scan are gone.
+- Consumer topics are configured (`persimmon.ddd.kafka.consumer.topics`), not derived from the
+  producer side; a consumer need not know which of its topics' events it publishes.
+- `traceparent` travels as a header, so the consumer's span is a child of the producer's request.
 
 ## Changes from `aipersimmon-ddd-flyway-spring-boot-starter`
 

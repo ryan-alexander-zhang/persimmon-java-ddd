@@ -23,8 +23,10 @@ Rules a second context lives by, all checked by `ArchitectureTest`:
 - a context owns its tables and its migrations (`db/migration/<context>/V<yyyyMMddNNN>__*.sql`);
   no cross-context joins;
 - contexts talk through integration events on the outbox. In one process they are delivered in
-  process; the day a context becomes a service, `persimmon.ddd.outbox.routes` sends its events to
-  a broker and that context gets a `start` of its own. No code changes.
+  process; the day a context becomes a service, add `persimmon-ddd-kafka` to both deployables,
+  route its events with `persimmon.ddd.outbox.routes`, and list the topics the other side consumes
+  under `persimmon.ddd.kafka.consumer.topics`. That context gets a `start` of its own. No code
+  changes.
 
 `OrderingFlowTest` drives the whole thing on H2:
 place, read, confirm (twice with one `Idempotency-Key`), conflict, validation, not-found, and the

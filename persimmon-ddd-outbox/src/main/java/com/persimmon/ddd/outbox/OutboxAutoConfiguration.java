@@ -11,6 +11,7 @@ import com.persimmon.ddd.outbox.mybatis.OutboxMapper;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.apache.ibatis.session.SqlSessionFactory;
@@ -20,6 +21,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.core.ResolvableType;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigurationPackages;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -127,16 +130,18 @@ public class OutboxAutoConfiguration {
     return (type, version) -> Optional.ofNullable(byKey.get(type + "#" + version));
   }
 
+  /** Always present: the relay's dispatcher when nothing else is, and the local leg of a broker module's dispatcher, which is {@code @Primary}. */
   @Bean
   @ConditionalOnMissingBean
-  public OutboxDispatcher persimmonOutboxDispatcher(
+  public InProcessOutboxDispatcher persimmonInProcessOutboxDispatcher(
       ApplicationEventPublisher publisher,
       ObjectProvider<ObjectMapper> json,
       IntegrationEventCatalog catalog,
       OutboxStore store,
       PlatformTransactionManager transactionManager,
       Clock persimmonOutboxClock,
-      ConsumerName consumer) {
+      ConsumerName consumer,
+      ConfigurableListableBeanFactory beanFactory) {
     return new InProcessOutboxDispatcher(
         publisher,
         json.getIfAvailable(ObjectMapper::new),
@@ -144,7 +149,25 @@ public class OutboxAutoConfiguration {
         store,
         new TransactionTemplate(transactionManager),
         persimmonOutboxClock,
-        consumer.value());
+        consumer.value(),
+        new Upcasters(upcasterBeans(beanFactory)));
+  }
+
+  /** Every {@link EventUpcaster} bean with its type arguments, from the bean definition first so a {@code @Bean} lambda works. */
+  static List<Upcasters.Registration> upcasterBeans(ConfigurableListableBeanFactory beanFactory) {
+    List<Upcasters.Registration> found = new java.util.ArrayList<>();
+    for (String name : beanFactory.getBeanNamesForType(EventUpcaster.class)) {
+      EventUpcaster<?, ?> bean = beanFactory.getBean(name, EventUpcaster.class);
+      ResolvableType declared = beanFactory.getMergedBeanDefinition(name).getResolvableType().as(EventUpcaster.class);
+      ResolvableType type = declared.getGeneric(0).resolve() != null ? declared : ResolvableType.forInstance(bean).as(EventUpcaster.class);
+      Class<?> from = type.getGeneric(0).resolve();
+      Class<?> to = type.getGeneric(1).resolve();
+      if (from == null || to == null || from == IntegrationEvent.class) {
+        throw new IllegalStateException("bean '" + name + "' must declare concrete EventUpcaster<From, To> type arguments");
+      }
+      found.add(new Upcasters.Registration(from, to, bean));
+    }
+    return found;
   }
 
   @Bean
