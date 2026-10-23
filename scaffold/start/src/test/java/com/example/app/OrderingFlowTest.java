@@ -24,7 +24,8 @@ import org.springframework.context.event.EventListener;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest(properties = "persimmon.ddd.outbox.relay-enabled=false")
+@SpringBootTest(
+    properties = {"persimmon.ddd.outbox.relay-enabled=false", "ordering.confirmation-timeout=0s"})
 @AutoConfigureMockMvc
 class OrderingFlowTest {
   @TestConfiguration
@@ -78,7 +79,18 @@ class OrderingFlowTest {
 
     relay.relay();
     assertEquals(id, probe.confirmed.get(0).payload().orderId());
-    assertEquals("CONFIRMED", lookup.find(id).orElseThrow().status());
+    assertEquals("CONFIRMED", lookup.find(id).orElseThrow().status(), "the deadline found it confirmed and let it be");
+  }
+
+  @Test
+  void anOrderNotConfirmedInTimeIsCancelledByTheDeadline() throws Exception {
+    String id =
+        mvc.perform(post("/orders").contentType(MediaType.APPLICATION_JSON).content(ORDER))
+            .andReturn().getResponse().getContentAsString()
+            .replaceAll(".*\"id\":\"([^\"]+)\".*", "$1");
+
+    relay.relay();
+    mvc.perform(get("/orders/" + id)).andExpect(jsonPath("$.status").value("CANCELLED"));
   }
 
   @Test

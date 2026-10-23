@@ -1,6 +1,9 @@
 spring:
   application:
     name: ordering
+ordering:
+  # An order not confirmed by then is cancelled by a scheduled command (see OrderPlacedHandler).
+  confirmation-timeout: 30m
   datasource:
     url: jdbc:h2:mem:ordering;DB_CLOSE_DELAY=-1
 persimmon:

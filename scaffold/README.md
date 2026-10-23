@@ -30,9 +30,15 @@ Rules a second context lives by, all checked by `ArchitectureTest`:
   under `persimmon.ddd.kafka.consumer.topics`. That context gets a `start` of its own. No code
   changes.
 
+A saga is event handlers plus a deadline. `OrderPlacedHandler` schedules
+`CancelUnconfirmedOrder` for `ordering.confirmation-timeout` later through `CommandScheduler`; the
+row commits with the order and the outbox relay sends it when due. Its handler checks the order is
+still `PLACED` before cancelling, so a confirmed order ignores it. A reply from another context
+would be an integration event whose listener sends the next command the same way.
+
 `OrderingFlowTest` drives the whole thing on H2:
-place, read, confirm (twice with one `Idempotency-Key`), conflict, validation, not-found, and the
-outbox relaying `OrderConfirmedEvent`.
+place, read, confirm (twice with one `Idempotency-Key`), conflict, validation, not-found, the
+outbox relaying `OrderConfirmedEvent`, and the deadline cancelling an unconfirmed order.
 
 The `persimmon-ddd` modules come from GitHub Packages, which requires a token even for a public
 package. Once per machine, put a server with id `github` in `~/.m2/settings.xml`:
