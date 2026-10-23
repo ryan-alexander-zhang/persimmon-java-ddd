@@ -10,6 +10,33 @@
   <packaging>pom</packaging>
   <name>persimmon-ddd</name>
   <description>Lean tactical DDD building blocks for Java, used by Persimmon-created projects.</description>
+  <url>https://github.com/ryan-alexander-zhang/persimmon-java-ddd</url>
+
+  <licenses>
+    <license>
+      <name>Apache-2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+    </license>
+  </licenses>
+
+  <scm>
+    <url>https://github.com/ryan-alexander-zhang/persimmon-java-ddd</url>
+    <connection>scm:git:https://github.com/ryan-alexander-zhang/persimmon-java-ddd.git</connection>
+  </scm>
+
+  <!-- GitHub Packages. Snapshots and releases go to the same repository; the workflow in
+       .github/workflows/publish.yml deploys with GITHUB_TOKEN, a developer with a PAT (write:packages)
+       under server id "github" in ~/.m2/settings.xml can mvn deploy too. -->
+  <distributionManagement>
+    <repository>
+      <id>github</id>
+      <url>https://maven.pkg.github.com/ryan-alexander-zhang/persimmon-java-ddd</url>
+    </repository>
+    <snapshotRepository>
+      <id>github</id>
+      <url>https://maven.pkg.github.com/ryan-alexander-zhang/persimmon-java-ddd</url>
+    </snapshotRepository>
+  </distributionManagement>
 
   <modules>
     <module>persimmon-ddd-core</module>

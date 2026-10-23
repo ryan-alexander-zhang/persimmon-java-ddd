@@ -16,6 +16,19 @@ module graph is the dependency rule: what is not on a module's classpath cannot 
 place, read, confirm (twice with one `Idempotency-Key`), conflict, validation, not-found, and the
 outbox relaying `OrderConfirmedEvent`.
 
+The `persimmon-ddd` modules come from GitHub Packages, which requires a token even for a public
+package. Once per machine, put a server with id `github` in `~/.m2/settings.xml`:
+
+```xml
+<servers>
+  <server>
+    <id>github</id>
+    <username>YOUR_GITHUB_USERNAME</username>
+    <password>A_PERSONAL_ACCESS_TOKEN_WITH_read:packages</password>
+  </server>
+</servers>
+```
+
 ```
 mvn test
 mvn spring-boot:run -pl ordering-start   # Swagger UI at /swagger-ui.html, spec at /v3/api-docs

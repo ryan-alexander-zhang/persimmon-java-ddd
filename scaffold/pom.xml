@@ -39,6 +39,18 @@
     <mybatis-plus.version>3.5.15</mybatis-plus.version>
   </properties>
 
+  <!-- persimmon-ddd is on GitHub Packages, which needs a GitHub token even to read: a server with
+       id "github" in ~/.m2/settings.xml (username + a PAT with read:packages). See README.md. -->
+  <repositories>
+    <repository>
+      <id>github</id>
+      <url>https://maven.pkg.github.com/ryan-alexander-zhang/persimmon-java-ddd</url>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+
   <dependencyManagement>
     <dependencies>
       <dependency>

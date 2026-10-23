@@ -155,6 +155,14 @@ it with `mvn test -f scaffold/pom.xml` after `mvn install` here.
   wiring.
 - Not an archetype; `persimmon new` copies it and renames its coordinates.
 
+## Getting it
+
+The modules are published to GitHub Packages on every push to `main` (snapshots) and on every
+`v*` tag (releases): `https://maven.pkg.github.com/ryan-alexander-zhang/persimmon-java-ddd`.
+GitHub Packages needs a token even to read, so a consumer puts a server with id `github`
+(username + a PAT with `read:packages`) in `~/.m2/settings.xml` and the repository above in its
+pom; `scaffold/pom.xml` shows both. `persimmon new` writes a project that is already set up so.
+
 ## Build
 
 ```
