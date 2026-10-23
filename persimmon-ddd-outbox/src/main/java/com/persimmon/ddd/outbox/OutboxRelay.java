@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 /**
  * One poll: lease a batch of due rows, dispatch each, mark the delivered ones sent, schedule a
@@ -23,6 +24,7 @@ public class OutboxRelay {
   private final RetryBackoff backoff;
   private final Clock clock;
   private final OutboxProperties properties;
+  private final TraceContextCarrier traces;
 
   public OutboxRelay(
       OutboxStore store,
@@ -30,13 +32,15 @@ public class OutboxRelay {
       FailureClassifier failures,
       RetryBackoff backoff,
       Clock clock,
-      OutboxProperties properties) {
+      OutboxProperties properties,
+      TraceContextCarrier traces) {
     this.store = store;
     this.dispatcher = dispatcher;
     this.failures = failures;
     this.backoff = backoff;
     this.clock = clock;
     this.properties = properties;
+    this.traces = traces;
   }
 
   /** Returns how many rows were claimed; 0 means nothing was due. */
@@ -57,7 +61,7 @@ public class OutboxRelay {
               message.type() + " is destined for '" + message.destination() + "' but the active"
                   + " dispatcher stays in process; add the messaging module for that transport");
         }
-        dispatcher.dispatch(message);
+        dispatch(message);
         delivered.add(message.eventId());
       } catch (RuntimeException e) {
         handleFailure(message, e);
@@ -67,6 +71,23 @@ public class OutboxRelay {
       store.markSent(delivered, clock.instant());
     }
     return claimed.size();
+  }
+
+  /** Under the writer's trace as a child span, and with its correlation id on the MDC. */
+  private void dispatch(OutboxMessage message) {
+    MDC.put("correlationId", message.correlationId());
+    try {
+      traces.restore(
+          message.traceparent(),
+          message.tracestate(),
+          "outbox.dispatch " + message.type(),
+          () -> {
+            dispatcher.dispatch(message);
+            return null;
+          });
+    } finally {
+      MDC.remove("correlationId");
+    }
   }
 
   private void handleFailure(OutboxMessage message, RuntimeException error) {

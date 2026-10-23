@@ -10,7 +10,7 @@ time. Group id `com.persimmon.ddd`.
 | `persimmon-ddd-web` | Spring Boot auto-configuration: RFC 9457 problem details for every `DomainException`, `ProblemCatalog` overrides per code, `X-Request-Id` filter, `Cursor` as a JSON string | application, Spring MVC |
 | `persimmon-ddd-persistence-mybatis-plus` | `MybatisPlusAggregateRepository`: whole-row save with optimistic locking, events published after save; assembles `MybatisPlusInterceptor` from `InnerInterceptor` beans | application, MyBatis-Plus |
 | `persimmon-ddd-spring-boot-starter` | Auto-configures `CommandBus`/`QueryBus` from handler beans, logging + validation + transaction interceptors, `UnitOfWork`, Spring-event `DomainEvents`, UUIDv7 `IdGenerator` | application, Spring Boot |
-| `persimmon-ddd-outbox` | Transactional outbox: `IntegrationEvents` writes a row with the command, a leased relay delivers it in process (or to a broker module), retries with backoff, dead-letters, replays, inbox dedup, optional cleanup; SQL under `persimmon/db/outbox/` | application, MyBatis-Plus starter |
+| `persimmon-ddd-outbox` | Transactional outbox: `IntegrationEvents` writes a row with the command, a leased relay delivers it in process (or to a broker module), retries with backoff, dead-letters, replays, inbox dedup, optional cleanup; the row carries tenant and trace context, so the dispatch is a child span of the writing request when Micrometer Tracing is wired | spring-boot-starter, MyBatis-Plus starter, Flyway migrations under `persimmon/db/migration/outbox/` |
 | `persimmon-ddd-flyway` | Applies every module's `persimmon/db/migration/<component>/<vendor>` through Flyway after the application's own migrations, one history table per component | Flyway |
 | `persimmon-ddd-openapi` | springdoc with the `ProblemDetail` schema and the default problem responses attached to every operation | web, springdoc |
 | `persimmon-ddd-tenancy` | Off until `persimmon.ddd.tenancy.enabled=true`: tenant per request into `TenantContext`, listed tables scoped by `tenant_id` in SQL, a guard for tables nobody decided about | persistence-mybatis-plus, Spring MVC |
@@ -90,9 +90,12 @@ it with `mvn test -f scaffold/pom.xml` after `mvn install` here.
 - Dispatch is synchronous per message; no `InFlightDispatch` handles, no poll time budget, no
   explicit release: a lease that is not cleared expires on its own.
 - No ShedLock. Cleanup is a bounded `DELETE` that is safe to run on every instance.
-- Dead-letter reasons and replay stay; the dead-letter listing API, `EventDestinations`,
-  `EventUpcaster`, observability hooks, `traceparent` columns and the tenant column are out.
-  The `destination` column stays so a broker module can route rows written before it arrived.
+- Dead-letter reasons and replay stay; the dead-letter listing API, `EventDestinations` and
+  `EventUpcaster` are out. The `destination` column stays so a broker module can route rows
+  written before it arrived.
+- Tracing across the hop is built in (`TraceContextCarrier`, Micrometer Tracing when present)
+  instead of a separate observability module and SPI; the framework opens no other spans, Spring
+  Boot's auto-instrumentation covers HTTP, JDBC and messaging.
 - Schema ships as Flyway migrations under `persimmon/db/migration/outbox/{postgresql,mysql,h2}`;
   `persimmon-ddd-flyway` applies them, or point your own tool at them.
 - Not yet ported: Kafka dispatcher and consumer bridge (`messaging-kafka`), `publishAs`.

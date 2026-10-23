@@ -18,13 +18,16 @@ public class OutboxWriter implements IntegrationEvents {
   private final IdGenerator ids;
   private final Clock clock;
   private final String source;
+  private final TraceContextCarrier traces;
 
-  public OutboxWriter(OutboxStore store, ObjectMapper json, IdGenerator ids, Clock clock, String source) {
+  public OutboxWriter(
+      OutboxStore store, ObjectMapper json, IdGenerator ids, Clock clock, String source, TraceContextCarrier traces) {
     this.store = store;
     this.json = json;
     this.ids = ids;
     this.clock = clock;
     this.source = source;
+    this.traces = traces;
   }
 
   @Override
@@ -41,6 +44,7 @@ public class OutboxWriter implements IntegrationEvents {
     } catch (JsonProcessingException e) {
       throw new IllegalStateException("cannot serialise " + event.getClass().getName(), e);
     }
+    TraceContextCarrier.Captured trace = traces.capture();
     store.insert(
         new OutboxMessage(
             ids.newId(),
@@ -54,8 +58,8 @@ public class OutboxWriter implements IntegrationEvents {
             context.messageId(),
             IntegrationEvent.destinationOf(event.getClass()).orElse(null),
             TenantContext.effective().value(),
-            null,
-            null,
+            trace.traceparent(),
+            trace.tracestate(),
             0),
         clock.instant());
   }
