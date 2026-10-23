@@ -13,6 +13,7 @@
 
   <modules>
     <module>persimmon-ddd-core</module>
+    <module>persimmon-ddd-application</module>
   </modules>
 
   <properties>

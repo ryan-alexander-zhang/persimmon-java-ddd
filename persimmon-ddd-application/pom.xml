@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.persimmon.ddd</groupId>
+    <artifactId>persimmon-ddd-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <!-- Depends on core only. No Spring here; the Spring starter wires these contracts. -->
+  <artifactId>persimmon-ddd-application</artifactId>
+  <name>persimmon-ddd-application</name>
+  <description>Application-layer contracts: command and query buses, interceptors, unit of work, domain event publication, paging, application exceptions.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.persimmon.ddd</groupId>
+      <artifactId>persimmon-ddd-core</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>
