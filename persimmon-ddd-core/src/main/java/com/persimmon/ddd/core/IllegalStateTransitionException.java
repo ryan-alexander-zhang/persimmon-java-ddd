@@ -5,4 +5,9 @@ public final class IllegalStateTransitionException extends DomainException {
   public IllegalStateTransitionException(ErrorCode errorCode, Object from, Object to) {
     super(errorCode, "illegal state transition: " + from + " -> " + to);
   }
+
+  @Override
+  protected ErrorCategory fallbackCategory() {
+    return ErrorCategory.CONFLICT;
+  }
 }

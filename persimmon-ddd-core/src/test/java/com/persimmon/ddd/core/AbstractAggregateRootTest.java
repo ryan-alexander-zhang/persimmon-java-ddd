@@ -116,7 +116,8 @@ class AbstractAggregateRootTest {
     DomainException ex = assertThrows(DomainException.class, () -> order.enforce(new CreditRule(true)));
     assertEquals("credit limit exceeded", ex.getMessage());
     assertSame(Code.CREDIT_EXCEEDED, ex.errorCode().orElseThrow());
-    assertEquals(ErrorCategory.DOMAIN_RULE, ex.errorCode().orElseThrow().category());
+    assertEquals(ErrorCategory.DOMAIN_RULE, ex.category());
+    assertEquals(ErrorCategory.DOMAIN_RULE, new DomainException("plain").category());
   }
 
   @Test

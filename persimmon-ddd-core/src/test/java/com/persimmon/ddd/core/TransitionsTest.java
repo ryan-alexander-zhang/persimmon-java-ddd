@@ -51,11 +51,19 @@ class TransitionsTest {
             () -> RULES.check(Status.CANCELLED, Status.CONFIRMED));
     assertSame(Code.NOT_PENDING, refused.errorCode().orElseThrow());
     assertEquals("illegal state transition: CANCELLED -> CONFIRMED", refused.getMessage());
+    assertEquals(ErrorCategory.CONFLICT, refused.category());
     assertTrue(
         assertThrows(
                 IllegalStateTransitionException.class,
                 () -> RULES.check(Status.CONFIRMED, Status.PENDING))
             .errorCode()
             .isEmpty());
+    assertEquals(
+        ErrorCategory.CONFLICT,
+        assertThrows(
+                IllegalStateTransitionException.class,
+                () -> RULES.check(Status.CONFIRMED, Status.PENDING))
+            .category(),
+        "uncoded transition refusal is still a conflict");
   }
 }
