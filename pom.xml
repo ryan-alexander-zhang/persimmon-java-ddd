@@ -14,21 +14,23 @@
   <modules>
     <module>persimmon-ddd-core</module>
     <module>persimmon-ddd-application</module>
+    <module>persimmon-ddd-web</module>
   </modules>
 
   <properties>
     <maven.compiler.release>21</maven.compiler.release>
     <maven.compiler.parameters>true</maven.compiler.parameters>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <junit.version>5.11.4</junit.version>
+    <spring-boot.version>3.5.10</spring-boot.version>
   </properties>
 
   <dependencyManagement>
     <dependencies>
+      <!-- Manages versions only; core and application still compile against nothing. -->
       <dependency>
-        <groupId>org.junit</groupId>
-        <artifactId>junit-bom</artifactId>
-        <version>${junit.version}</version>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>${spring-boot.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>

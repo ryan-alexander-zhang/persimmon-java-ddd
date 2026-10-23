@@ -7,6 +7,7 @@ time. Group id `com.persimmon.ddd`.
 |---|---|---|
 | `persimmon-ddd-core` | Annotations, `AbstractAggregateRoot`, `Invariant`, `Transitions`, `ErrorCode`, `DomainException`, `IdGenerator` | nothing |
 | `persimmon-ddd-application` | `Command`/`Query` + handlers and buses (`SimpleCommandBus`, `SimpleQueryBus`), `CommandContext`, `CommandInterceptor`, `UnitOfWork`, `DomainEvents`, `Slice`/`Page`/`Cursor`, application exceptions | core |
+| `persimmon-ddd-web` | Spring Boot auto-configuration: RFC 9457 problem details for every `DomainException`, `ProblemCatalog` overrides per code, `X-Request-Id` filter, `Cursor` as a JSON string | application, Spring MVC |
 
 ## Changes from `aipersimmon-ddd-core`
 
@@ -31,6 +32,19 @@ time. Group id `com.persimmon.ddd`.
 - Removed: `CommandBus.sendAs` (process manager adds it back when it lands), `CommandPrecheck`
   (write an interceptor or validate in the handler), `QueryInterceptor` (one user), `@Projection`
   (two users).
+
+## Changes from `aipersimmon-ddd-web` + `aipersimmon-ddd-web-spring-boot-starter`
+
+- One module that is the starter. Package `com.persimmon.ddd.web`, properties `persimmon.ddd.web.*`.
+- One handler for all of `DomainException`: a `ProblemCatalog` override for the code wins, else
+  the default of `DomainException.category()`. No handler per exception class.
+- `WebExceptionHandler` extends Spring's `ResponseEntityExceptionHandler`, so Spring MVC's own
+  exceptions keep their standard problem details instead of being re-mapped by hand.
+- `ProblemDescriptor` carries a literal title; no `MessageSource` title keys.
+- Removed: `ApiException` and `ApiError` (throw a coded `DomainException`; `ProblemDetail` is the
+  model), `ProblemRegistry`, `request-id.generate-if-absent` (always generated).
+- Not yet ported: idempotency, rate limiting, replay protection and their stores. They come as
+  their own component when needed.
 
 ## Build
 
