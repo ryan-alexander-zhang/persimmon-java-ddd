@@ -11,6 +11,7 @@ time. Group id `com.persimmon.ddd`.
 | `persimmon-ddd-persistence-mybatis-plus` | `MybatisPlusAggregateRepository`: whole-row save with optimistic locking, events published after save; assembles `MybatisPlusInterceptor` from `InnerInterceptor` beans | application, MyBatis-Plus |
 | `persimmon-ddd-spring-boot-starter` | Auto-configures `CommandBus`/`QueryBus` from handler beans, logging + validation + transaction interceptors, `UnitOfWork`, Spring-event `DomainEvents`, UUIDv7 `IdGenerator` | application, Spring Boot |
 | `persimmon-ddd-outbox` | Transactional outbox: `IntegrationEvents` writes a row with the command, a leased relay delivers it in process (or to a broker module), retries with backoff, dead-letters, replays, inbox dedup, optional cleanup; SQL under `persimmon/db/outbox/` | application, MyBatis-Plus starter |
+| `persimmon-ddd-archunit` | `PersimmonDddRules.all()` plus one rule per concern, for a project's own ArchUnit test | application, ArchUnit (test scope in consumers) |
 
 ## Changes from `aipersimmon-ddd-core`
 
@@ -85,6 +86,21 @@ time. Group id `com.persimmon.ddd`.
 - Schema ships as one SQL file per dialect (`postgresql.sql` also runs on H2, `mysql.sql`),
   not as a Flyway history; run it with the project's migration tool.
 - Not yet ported: Kafka dispatcher and consumer bridge (`messaging-kafka`), `publishAs`.
+
+## Changes from `aipersimmon-ddd-archunit`, `aipersimmon-ddd-test`, `aipersimmon-ddd-test-support`
+
+- One class, `PersimmonDddRules`, 25 rules in `all()` and a bounded-context rule that takes the
+  base package. Rules about dropped modules (operation log, process manager, tenancy, `sendAs`,
+  `InvariantViolationException`, `@Projection`) are gone with them.
+- `@ValueObject` types must be records or enums; that replaces the separate immutability and
+  equals/hashCode rules.
+- Dropped: `PackageInfoChecks` (a source-tree check, not architecture), `ModuleNamingChecks`,
+  `PersistenceRules`, and the opt-in rules for Spring `@Repository` on implementations and
+  validation annotations on every command field.
+- No `persimmon-ddd-test`: `SimpleCommandBus`, a `List::add` lambda for `IntegrationEvents` and a
+  `Supplier::get` lambda for `UnitOfWork` are the test doubles.
+- No `persimmon-ddd-test-support`: tests run on H2; a Postgres test is one Testcontainers field
+  with Spring Boot's `@ServiceConnection`.
 
 ## Build
 

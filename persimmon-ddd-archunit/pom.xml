@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.persimmon.ddd</groupId>
+    <artifactId>persimmon-ddd-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <!-- ArchUnit rules a project runs in its own tests. Consumers add it at test scope. -->
+  <artifactId>persimmon-ddd-archunit</artifactId>
+  <name>persimmon-ddd-archunit</name>
+  <description>ArchUnit rules for the layering, building blocks, events, CQRS and repositories of a persimmon-ddd project.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.persimmon.ddd</groupId>
+      <artifactId>persimmon-ddd-application</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.tngtech.archunit</groupId>
+      <artifactId>archunit-junit5</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-web</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-context</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>
