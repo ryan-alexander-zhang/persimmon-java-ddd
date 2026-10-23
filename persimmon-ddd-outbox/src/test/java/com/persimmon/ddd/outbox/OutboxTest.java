@@ -16,6 +16,8 @@ import com.persimmon.ddd.application.IntegrationEvent;
 import com.persimmon.ddd.application.IntegrationEvents;
 import com.persimmon.ddd.application.TenantContext;
 import com.persimmon.ddd.application.TenantId;
+import com.persimmon.ddd.outbox.billing.BillingListener;
+import com.persimmon.ddd.outbox.inventory.InventoryListener;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -27,14 +29,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest
-class OutboxTest {
+public class OutboxTest {
   @EventType(context = "ordering", name = "OrderPlaced", version = 1)
-  record OrderPlaced(String orderId, int lines) implements IntegrationEvent {
+  public record OrderPlaced(String orderId, int lines) implements IntegrationEvent {
     @Override
     public String subject() {
       return orderId;
@@ -61,6 +64,16 @@ class OutboxTest {
       return null;
     }
 
+    @Bean
+    BillingListener billing() {
+      return new BillingListener();
+    }
+
+    @Bean
+    InventoryListener inventory() {
+      return new InventoryListener();
+    }
+
     @EventListener
     void on(EventEnvelope<OrderPlaced> envelope) {
       if (failWith != null) {
@@ -72,6 +85,8 @@ class OutboxTest {
   }
 
   @Autowired App app;
+  @Autowired BillingListener billing;
+  @Autowired InventoryListener inventory;
   @Autowired IntegrationEvents events;
   @Autowired CommandScheduler scheduler;
   @Autowired OutboxRelay relay;
@@ -87,6 +102,9 @@ class OutboxTest {
     app.received.clear();
     app.tenants.clear();
     app.cancelled.clear();
+    billing.invoiced.clear();
+    inventory.reserved.clear();
+    inventory.failWith = null;
     app.failWith = null;
   }
 
@@ -225,7 +243,28 @@ class OutboxTest {
     jdbc.update("UPDATE persimmon_outbox SET sent = FALSE, sent_at = NULL");
     relay.relay();
     assertEquals(1, app.received.size());
-    assertEquals(1, count("persimmon_inbox"));
+    assertEquals(1, billing.invoiced.size());
+    assertEquals(
+        List.of("billing", "inventory", "shop-monolith"),
+        jdbc.queryForList("SELECT consumer FROM persimmon_inbox ORDER BY consumer", String.class),
+        "one inbox record per listening context; a listener outside any context counts as the deployable");
+  }
+
+  @Test
+  void aFailingContextIsRetriedAloneAndNeverRollsBackAnother() {
+    publish(new OrderPlaced("o-1", 1));
+    inventory.failWith = new IllegalStateException("inventory bug");
+    relay.relay();
+    assertEquals(List.of("o-1"), billing.invoiced, "billing committed although inventory failed");
+    assertEquals(1, row("persimmon_outbox", "id").get("ATTEMPTS"));
+
+    inventory.failWith = null;
+    jdbc.update("UPDATE persimmon_outbox SET next_attempt_at = NULL");
+    relay.relay();
+    assertEquals(List.of("o-1"), billing.invoiced, "the retry skipped billing");
+    assertEquals(List.of("o-1"), inventory.reserved);
+    assertEquals(1, app.received.size());
+    assertEquals(true, row("persimmon_outbox", "id").get("SENT"));
   }
 
   @Test

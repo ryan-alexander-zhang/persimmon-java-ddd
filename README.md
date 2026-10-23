@@ -104,6 +104,11 @@ it with `mvn test -f scaffold/pom.xml` after `mvn install` here.
 - Schema ships as Flyway migrations under `persimmon/db/migration/outbox/{postgresql,mysql,h2}`;
   `persimmon-ddd-flyway` applies them, or point your own tool at them.
 - `publishAs` is not ported.
+- In-process delivery is per bounded context: the dispatcher groups the listeners of an event by
+  context (first package under the application's base package, `ContextNames`), and runs each
+  group in its own transaction with its own inbox record (`consumer` = context). A context whose
+  listener fails is retried alone; the others neither roll back nor re-run, as if each were a
+  service already. A listener outside any context is recorded under `spring.application.name`.
 - `CommandScheduler.schedule(command, at, context)` replaces the process-manager module: a
   scheduled command is an outbox row due later (source `persimmon.command`, type the command
   class), sent on the command bus by the same relay with the same retries, dead letters, inbox

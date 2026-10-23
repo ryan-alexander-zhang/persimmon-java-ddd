@@ -32,7 +32,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.context.annotation.Configuration;
@@ -149,23 +149,23 @@ public class OutboxAutoConfiguration {
   @Bean
   @ConditionalOnMissingBean
   public InProcessOutboxDispatcher persimmonInProcessOutboxDispatcher(
-      ApplicationEventPublisher publisher,
+      ApplicationContext application,
       ObjectProvider<ObjectMapper> json,
       IntegrationEventCatalog catalog,
       OutboxStore store,
       PlatformTransactionManager transactionManager,
       Clock persimmonOutboxClock,
-      ConsumerName consumer,
+      ContextNames contexts,
       ConfigurableListableBeanFactory beanFactory,
       CommandBus commands) {
     return new InProcessOutboxDispatcher(
-        publisher,
+        application,
         json.getIfAvailable(ObjectMapper::new),
         catalog,
         store,
         new TransactionTemplate(transactionManager),
         persimmonOutboxClock,
-        consumer.value(),
+        contexts,
         new Upcasters(upcasterBeans(beanFactory)),
         commands);
   }
@@ -236,13 +236,14 @@ public class OutboxAutoConfiguration {
     return new CleanupPoller(store, persimmonOutboxClock, properties.cleanup());
   }
 
-  /** The inbox consumer id: this deployable, so every context it hosts shares one dedup record per event. */
+  /** Inbox consumers are bounded contexts: the first package under the application's base packages; the deployable's name for anything else. */
   @Bean
-  ConsumerName persimmonOutboxConsumerName(org.springframework.core.env.Environment env) {
-    return new ConsumerName(env.getProperty("spring.application.name", "persimmon"));
+  @ConditionalOnMissingBean
+  public ContextNames persimmonContextNames(BeanFactory beanFactory, org.springframework.core.env.Environment env) {
+    return new ContextNames(
+        AutoConfigurationPackages.has(beanFactory) ? AutoConfigurationPackages.get(beanFactory) : List.of(),
+        env.getProperty("spring.application.name", "persimmon"));
   }
-
-  public record ConsumerName(String value) {}
 
   public static class RelayPoller {
     private final OutboxRelay relay;

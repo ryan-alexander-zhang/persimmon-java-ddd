@@ -10,48 +10,68 @@ import com.persimmon.ddd.application.IntegrationEvent;
 import com.persimmon.ddd.application.TenantContext;
 import com.persimmon.ddd.application.TenantId;
 import java.time.Clock;
-import org.springframework.context.ApplicationEventPublisher;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationListener;
 import org.springframework.context.PayloadApplicationEvent;
+import org.springframework.context.event.ApplicationListenerMethodAdapter;
+import org.springframework.context.event.GenericApplicationListener;
+import org.springframework.context.event.GenericApplicationListenerAdapter;
+import org.springframework.context.support.AbstractApplicationContext;
 import org.springframework.core.ResolvableType;
+import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.util.ClassUtils;
 
 /**
- * Delivers to this process's {@code @EventListener}s as an {@code EventEnvelope<T>}, inside one
- * transaction with the inbox check, so a redelivered row is skipped and a failed delivery leaves
- * no inbox record behind. Listeners run under the tenant the row was written for; registered
- * upcasters move an older payload to the newest version first. A broker module hands records it
- * received to {@link #dispatch} too, so both legs deliver the same way. A scheduled command row is
- * sent on the command bus under the same guard, as a child of the context that scheduled it.
+ * Delivers to this process's listeners as an {@code EventEnvelope<T>}, one bounded context at a
+ * time: each context's listeners run in their own transaction with their own inbox record, so a
+ * context whose listener fails is retried alone and never rolls back or re-runs another's work,
+ * exactly as if it were a service of its own. Listeners run under the tenant the row was written
+ * for; registered upcasters move an older payload to the newest version first. A broker module
+ * hands records it received to {@link #dispatch} too, so both legs deliver the same way. A
+ * scheduled command row is sent on the command bus under the same guard, recorded for the
+ * command's context, as a child of the context that scheduled it.
  */
 public class InProcessOutboxDispatcher implements OutboxDispatcher {
-  private final ApplicationEventPublisher publisher;
+  private final ApplicationContext application;
   private final ObjectMapper json;
   private final IntegrationEventCatalog catalog;
   private final OutboxStore store;
   private final TransactionOperations transactions;
   private final Clock clock;
-  private final String consumer;
+  private final ContextNames contexts;
   private final Upcasters upcasters;
   private final CommandBus commands;
+  // ponytail: listeners are indexed on first delivery of a type; a listener registered later is missed
+  private final Map<Class<?>, List<Delivery>> deliveries = new ConcurrentHashMap<>();
+
+  /** One context's listeners for one event type. */
+  private record Delivery(String consumer, List<GenericApplicationListener> listeners) {}
 
   public InProcessOutboxDispatcher(
-      ApplicationEventPublisher publisher,
+      ApplicationContext application,
       ObjectMapper json,
       IntegrationEventCatalog catalog,
       OutboxStore store,
       TransactionOperations transactions,
       Clock clock,
-      String consumer,
+      ContextNames contexts,
       Upcasters upcasters,
       CommandBus commands) {
-    this.publisher = publisher;
+    this.application = application;
     this.json = json;
     this.catalog = catalog;
     this.store = store;
     this.transactions = transactions;
     this.clock = clock;
-    this.consumer = consumer;
+    this.contexts = contexts;
     this.upcasters = upcasters;
     this.commands = commands;
   }
@@ -71,7 +91,7 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
     if (ScheduledCommandWriter.SOURCE.equals(message.source())) {
       Command<?> command = readCommand(message);
       CommandContext cause = new CommandContext(message.eventId(), message.correlationId(), message.causationId());
-      onceUnderTenant(message, () -> commands.send(command, cause));
+      onceUnderTenant(contexts.of(message.type()), message, () -> commands.send(command, cause));
       return;
     }
     Class<? extends IntegrationEvent> type =
@@ -100,12 +120,15 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
             message.correlationId(),
             message.causationId(),
             payload);
-    ResolvableType eventType = ResolvableType.forClassWithGenerics(EventEnvelope.class, delivered);
-    onceUnderTenant(message, () -> publisher.publishEvent(new PayloadApplicationEvent<>(this, envelope, eventType)));
+    PayloadApplicationEvent<?> event = new PayloadApplicationEvent<>(this, envelope, envelopeType(delivered));
+    for (Delivery delivery : deliveries.computeIfAbsent(delivered, this::deliveriesFor)) {
+      onceUnderTenant(
+          delivery.consumer(), message, () -> delivery.listeners().forEach(l -> l.onApplicationEvent(event)));
+    }
   }
 
-  /** In one transaction with the inbox check, under the row's tenant; a row seen before is skipped. */
-  private void onceUnderTenant(OutboxMessage message, Runnable delivery) {
+  /** In one transaction with the inbox check, under the row's tenant; a row the consumer saw before is skipped. */
+  private void onceUnderTenant(String consumer, OutboxMessage message, Runnable delivery) {
     TenantContext.runAs(
         new TenantId(message.tenantId()),
         () ->
@@ -115,6 +138,48 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
                     delivery.run();
                   }
                 }));
+  }
+
+  /** The listeners of {@code EventEnvelope<delivered>}, grouped by context in name order, ordered within one. */
+  private List<Delivery> deliveriesFor(Class<?> delivered) {
+    ResolvableType eventType = ResolvableType.forClassWithGenerics(PayloadApplicationEvent.class, envelopeType(delivered));
+    Map<String, List<GenericApplicationListener>> byConsumer = new TreeMap<>();
+    for (ApplicationListener<?> listener : allListeners()) {
+      GenericApplicationListener generic =
+          listener instanceof GenericApplicationListener g ? g : new GenericApplicationListenerAdapter(listener);
+      if (generic.supportsEventType(eventType) && generic.supportsSourceType(getClass())) {
+        byConsumer.computeIfAbsent(contexts.of(ownerOf(listener)), k -> new ArrayList<>()).add(generic);
+      }
+    }
+    byConsumer.values().forEach(AnnotationAwareOrderComparator::sort);
+    return byConsumer.entrySet().stream().map(e -> new Delivery(e.getKey(), List.copyOf(e.getValue()))).toList();
+  }
+
+  /** {@code @EventListener} methods are registered on the context; {@code ApplicationListener} beans are not. */
+  private Set<ApplicationListener<?>> allListeners() {
+    Set<ApplicationListener<?>> all = new LinkedHashSet<>();
+    if (application instanceof AbstractApplicationContext concrete) {
+      all.addAll(concrete.getApplicationListeners());
+    }
+    application.getBeansOfType(ApplicationListener.class).values().forEach(all::add);
+    return all;
+  }
+
+  /** The class that declares the listener: from the default listener id {@code pkg.Class.method(params)} or the bean class. */
+  private static String ownerOf(ApplicationListener<?> listener) {
+    if (listener instanceof ApplicationListenerMethodAdapter adapter) {
+      String id = adapter.getListenerId();
+      int params = id.indexOf('(');
+      int method = params < 0 ? -1 : id.lastIndexOf('.', params);
+      if (method > 0) {
+        return id.substring(0, method);
+      }
+    }
+    return ClassUtils.getUserClass(listener).getName();
+  }
+
+  private static ResolvableType envelopeType(Class<?> delivered) {
+    return ResolvableType.forClassWithGenerics(EventEnvelope.class, delivered);
   }
 
   private Command<?> readCommand(OutboxMessage message) {

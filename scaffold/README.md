@@ -25,7 +25,8 @@ Rules a second context lives by, all checked by `ArchitectureTest`:
 - a context owns its tables and its migrations (`db/migration/<context>/V<yyyyMMddNNN>__*.sql`);
   its `@TableName` rows stay in its `-infrastructure` module, so no other context can join them;
 - contexts talk through integration events on the outbox. In one process they are delivered in
-  process; the day a context becomes a service, add `persimmon-ddd-kafka` to both deployables,
+  process, one transaction and one inbox record per listening context, so a failing listener in
+  one context never rolls back or re-runs another's; the day a context becomes a service, add `persimmon-ddd-kafka` to both deployables,
   route its events with `persimmon.ddd.outbox.routes`, and list the topics the other side consumes
   under `persimmon.ddd.kafka.consumer.topics`. That context gets a `start` of its own. No code
   changes.
