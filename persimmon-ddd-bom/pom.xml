@@ -11,6 +11,18 @@
   <name>persimmon-ddd-bom</name>
   <description>Import this to get one version for every persimmon-ddd module. It manages nothing else.</description>
 
+  <!-- No parent on purpose (an importable BOM carries no build), so the publishing target is repeated here. -->
+  <distributionManagement>
+    <repository>
+      <id>github</id>
+      <url>https://maven.pkg.github.com/ryan-alexander-zhang/persimmon-java-ddd</url>
+    </repository>
+    <snapshotRepository>
+      <id>github</id>
+      <url>https://maven.pkg.github.com/ryan-alexander-zhang/persimmon-java-ddd</url>
+    </snapshotRepository>
+  </distributionManagement>
+
   <dependencyManagement>
     <dependencies>
       <dependency>
