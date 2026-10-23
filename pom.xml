@@ -16,6 +16,7 @@
     <module>persimmon-ddd-application</module>
     <module>persimmon-ddd-web</module>
     <module>persimmon-ddd-persistence-mybatis-plus</module>
+    <module>persimmon-ddd-spring-boot-starter</module>
   </modules>
 
   <properties>

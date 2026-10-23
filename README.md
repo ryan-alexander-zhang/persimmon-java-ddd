@@ -9,6 +9,7 @@ time. Group id `com.persimmon.ddd`.
 | `persimmon-ddd-application` | `Command`/`Query` + handlers and buses (`SimpleCommandBus`, `SimpleQueryBus`), `CommandContext`, `CommandInterceptor`, `UnitOfWork`, `DomainEvents`, `Slice`/`Page`/`Cursor`, application exceptions | core |
 | `persimmon-ddd-web` | Spring Boot auto-configuration: RFC 9457 problem details for every `DomainException`, `ProblemCatalog` overrides per code, `X-Request-Id` filter, `Cursor` as a JSON string | application, Spring MVC |
 | `persimmon-ddd-persistence-mybatis-plus` | `MybatisPlusAggregateRepository`: whole-row save with optimistic locking, events published after save; assembles `MybatisPlusInterceptor` from `InnerInterceptor` beans | application, MyBatis-Plus |
+| `persimmon-ddd-spring-boot-starter` | Auto-configures `CommandBus`/`QueryBus` from handler beans, logging + validation + transaction interceptors, `UnitOfWork`, Spring-event `DomainEvents`, UUIDv7 `IdGenerator` | application, Spring Boot |
 
 ## Changes from `aipersimmon-ddd-core`
 
@@ -56,6 +57,19 @@ time. Group id `com.persimmon.ddd`.
 - A stale version throws `ConcurrencyConflictException` and a duplicate key throws
   `DuplicateEntityException` directly; no translation interceptor in the command pipeline.
 - Tests run against H2 through the real mapper instead of a mocked `BaseMapper`.
+
+## Changes from `aipersimmon-ddd-cqrs-spring-boot-starter` + `id-spring-boot-starter` + `events-spring-boot-starter`
+
+- One starter, no properties. Package `com.persimmon.ddd.spring`.
+- `SpringCommandBus` / `SpringQueryBus` fill the application module's simple buses from the
+  context once all singletons exist; the message type comes from the bean definition, so a
+  `@Bean` lambda handler works. The dispatch loop is not duplicated here.
+- UUIDv7 is 12 lines over `SecureRandom`; the `java-uuid-generator` dependency is gone.
+- Removed: `CommandTransactionGuard` (the repository already refuses to save without a
+  transaction), `ConcurrencyTranslationCommandInterceptor` (persistence throws the application
+  exceptions itself), `PrecheckCommandInterceptor`, `RetryOnConflictCommandInterceptor`
+  (opt-in feature, add back when a project turns it on), in-process `IntegrationEvents` (moves
+  with the integration component).
 
 ## Build
 
