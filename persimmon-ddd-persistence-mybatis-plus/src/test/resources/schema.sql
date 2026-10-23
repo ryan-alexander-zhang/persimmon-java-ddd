@@ -1,0 +1,5 @@
+CREATE TABLE thing (
+  id VARCHAR(64) PRIMARY KEY,
+  label VARCHAR(64),
+  version BIGINT NOT NULL
+);

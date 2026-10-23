@@ -8,6 +8,7 @@ time. Group id `com.persimmon.ddd`.
 | `persimmon-ddd-core` | Annotations, `AbstractAggregateRoot`, `Invariant`, `Transitions`, `ErrorCode`, `DomainException`, `IdGenerator` | nothing |
 | `persimmon-ddd-application` | `Command`/`Query` + handlers and buses (`SimpleCommandBus`, `SimpleQueryBus`), `CommandContext`, `CommandInterceptor`, `UnitOfWork`, `DomainEvents`, `Slice`/`Page`/`Cursor`, application exceptions | core |
 | `persimmon-ddd-web` | Spring Boot auto-configuration: RFC 9457 problem details for every `DomainException`, `ProblemCatalog` overrides per code, `X-Request-Id` filter, `Cursor` as a JSON string | application, Spring MVC |
+| `persimmon-ddd-persistence-mybatis-plus` | `MybatisPlusAggregateRepository`: whole-row save with optimistic locking, events published after save; assembles `MybatisPlusInterceptor` from `InnerInterceptor` beans | application, MyBatis-Plus |
 
 ## Changes from `aipersimmon-ddd-core`
 
@@ -45,6 +46,16 @@ time. Group id `com.persimmon.ddd`.
   model), `ProblemRegistry`, `request-id.generate-if-absent` (always generated).
 - Not yet ported: idempotency, rate limiting, replay protection and their stores. They come as
   their own component when needed.
+
+## Changes from `aipersimmon-ddd-persistence-mybatis-plus` + `aipersimmon-ddd-mybatis-plus-spring-boot-starter`
+
+- One module. The row contract is `@TableName` + `@TableId` + `@Version Long`; no `VersionedRow`.
+- The repository writes `WHERE id = ? AND version = ?` and every mapped column itself, so the
+  `OptimisticLockerInnerInterceptor` and the `ClearedColumns` reflection over update strategies
+  are gone, and so is the post-write check that the interceptor was installed.
+- A stale version throws `ConcurrencyConflictException` and a duplicate key throws
+  `DuplicateEntityException` directly; no translation interceptor in the command pipeline.
+- Tests run against H2 through the real mapper instead of a mocked `BaseMapper`.
 
 ## Build
 
