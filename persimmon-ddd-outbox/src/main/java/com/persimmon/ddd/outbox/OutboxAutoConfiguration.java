@@ -94,10 +94,10 @@ public class OutboxAutoConfiguration {
       ObjectProvider<ObjectMapper> json,
       IdGenerator ids,
       Clock persimmonOutboxClock,
-      Environment env,
+      OutboxProperties properties,
       ObjectProvider<TraceContextCarrier> traces) {
     return new OutboxWriter(
-        store, json.getIfAvailable(ObjectMapper::new), ids, persimmonOutboxClock, env.source(),
+        store, json.getIfAvailable(ObjectMapper::new), ids, persimmonOutboxClock, properties,
         traces.getIfAvailable(() -> TraceContextCarrier.NOOP));
   }
 
@@ -115,12 +115,12 @@ public class OutboxAutoConfiguration {
         if (type.isInterface()) {
           continue;
         }
-        var eventType = IntegrationEvent.eventTypeOf(type);
-        Class<?> previous = byKey.put(eventType.name() + "#" + eventType.version(), type.asSubclass(IntegrationEvent.class));
+        IntegrationEvent.Contract contract = IntegrationEvent.contractOf(type);
+        Class<?> previous = byKey.put(contract.type() + "#" + contract.version(), type.asSubclass(IntegrationEvent.class));
         if (previous != null && previous != type) {
           throw new IllegalStateException(
               previous.getName() + " and " + type.getName() + " both declare @EventType "
-                  + eventType.name() + " v" + eventType.version());
+                  + contract.type() + " v" + contract.version());
         }
       }
     }
@@ -136,7 +136,7 @@ public class OutboxAutoConfiguration {
       OutboxStore store,
       PlatformTransactionManager transactionManager,
       Clock persimmonOutboxClock,
-      Environment env) {
+      ConsumerName consumer) {
     return new InProcessOutboxDispatcher(
         publisher,
         json.getIfAvailable(ObjectMapper::new),
@@ -144,7 +144,7 @@ public class OutboxAutoConfiguration {
         store,
         new TransactionTemplate(transactionManager),
         persimmonOutboxClock,
-        env.source());
+        consumer.value());
   }
 
   @Bean
@@ -196,13 +196,13 @@ public class OutboxAutoConfiguration {
     return new CleanupPoller(store, persimmonOutboxClock, properties.cleanup());
   }
 
-  /** The application's name as event source and inbox consumer id. */
+  /** The inbox consumer id: this deployable, so every context it hosts shares one dedup record per event. */
   @Bean
-  Environment persimmonOutboxEnvironment(org.springframework.core.env.Environment env) {
-    return new Environment(env.getProperty("spring.application.name", "persimmon"));
+  ConsumerName persimmonOutboxConsumerName(org.springframework.core.env.Environment env) {
+    return new ConsumerName(env.getProperty("spring.application.name", "persimmon"));
   }
 
-  public record Environment(String source) {}
+  public record ConsumerName(String value) {}
 
   public static class RelayPoller {
     private final OutboxRelay relay;

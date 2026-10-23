@@ -10,7 +10,6 @@ import com.persimmon.ddd.application.Command;
 import com.persimmon.ddd.application.CommandHandler;
 import com.persimmon.ddd.application.DomainEventHandler;
 import com.persimmon.ddd.application.EventType;
-import com.persimmon.ddd.application.Externalized;
 import com.persimmon.ddd.application.IntegrationEvent;
 import com.persimmon.ddd.application.Query;
 import com.persimmon.ddd.application.QueryHandler;
@@ -99,7 +98,6 @@ public final class PersimmonDddRules {
         .and(domainEventListenersShouldBeApplicationHandlers())
         .and(integrationEventListenersShouldResideInAdapters())
         .and(integrationEventsShouldDeclareAUniqueEventType())
-        .and(externalizedShouldOnlyAnnotateIntegrationEvents())
         .and(commandsQueriesAndHandlersShouldResideInApplication())
         .and(commandHandlersShouldNotDependOnOtherCommandHandlers())
         .and(readModelsAndQueryResultsShouldNotBeTheWriteModel())
@@ -265,7 +263,7 @@ public final class PersimmonDddRules {
 
   public static ArchRule integrationEventsShouldDeclareAUniqueEventType() {
     ArchCondition<JavaClass> condition =
-        new ArchCondition<>("declare a unique @EventType(name, version >= 1)") {
+        new ArchCondition<>("declare a unique @EventType(context, name, version >= 1)") {
           private final Map<String, List<String>> byKey = new HashMap<>();
 
           @Override
@@ -285,8 +283,8 @@ public final class PersimmonDddRules {
               return;
             }
             EventType type = event.getAnnotationOfType(EventType.class);
-            if (type.name().isBlank() || type.version() < 1) {
-              events.add(SimpleConditionEvent.violated(event, event.getName() + " declares a blank name or version < 1"));
+            if (type.context().isBlank() || type.context().contains(".") || type.name().isBlank() || type.version() < 1) {
+              events.add(SimpleConditionEvent.violated(event, event.getName() + " declares a blank context or name, a dotted context, or version < 1"));
             }
             List<String> sharing = byKey.get(key(type));
             if (sharing.size() > 1) {
@@ -295,17 +293,11 @@ public final class PersimmonDddRules {
           }
 
           private String key(EventType type) {
-            return type.name() + " v" + type.version();
+            return type.context() + "." + type.name() + " v" + type.version();
           }
         };
     return classes().that().implement(IntegrationEvent.class).and().areNotInterfaces().should(condition)
         .as("integration events should declare a unique @EventType")
-        .allowEmptyShould(true);
-  }
-
-  public static ArchRule externalizedShouldOnlyAnnotateIntegrationEvents() {
-    return classes().that().areAnnotatedWith(Externalized.class).should().implement(IntegrationEvent.class)
-        .as("@Externalized should only annotate integration events")
         .allowEmptyShould(true);
   }
 

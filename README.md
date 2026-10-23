@@ -91,9 +91,11 @@ it with `mvn test -f scaffold/pom.xml` after `mvn install` here.
 - Dispatch is synchronous per message; no `InFlightDispatch` handles, no poll time budget, no
   explicit release: a lease that is not cleared expires on its own.
 - No ShedLock. Cleanup is a bounded `DELETE` that is safe to run on every instance.
-- Dead-letter reasons and replay stay; the dead-letter listing API, `EventDestinations` and
-  `EventUpcaster` are out. The `destination` column stays so a broker module can route rows
-  written before it arrived.
+- Dead-letter reasons and replay stay; the dead-letter listing API and `EventUpcaster` are out.
+- No `@Externalized`: where an event goes is deployment, not code. `persimmon.ddd.outbox.routes`
+  maps a type or a `context.*` prefix to an external destination, resolved when the row is written
+  (the `destination` column); unrouted events stay in process. The row's `source` is the event's
+  context, so it does not change when that context becomes a service of its own.
 - Tracing across the hop is built in (`TraceContextCarrier`, Micrometer Tracing when present)
   instead of a separate observability module and SPI; the framework opens no other spans, Spring
   Boot's auto-instrumentation covers HTTP, JDBC and messaging.

@@ -9,7 +9,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.persimmon.ddd.application.CommandContext;
 import com.persimmon.ddd.application.EventEnvelope;
 import com.persimmon.ddd.application.EventType;
-import com.persimmon.ddd.application.Externalized;
 import com.persimmon.ddd.application.IntegrationEvent;
 import com.persimmon.ddd.application.IntegrationEvents;
 import com.persimmon.ddd.application.TenantContext;
@@ -31,7 +30,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest
 class OutboxTest {
-  @EventType(name = "ordering.OrderPlaced", version = 1)
+  @EventType(context = "ordering", name = "OrderPlaced", version = 1)
   record OrderPlaced(String orderId, int lines) implements IntegrationEvent {
     @Override
     public String subject() {
@@ -39,8 +38,7 @@ class OutboxTest {
     }
   }
 
-  @EventType(name = "ordering.OrderShipped", version = 1)
-  @Externalized("ordering.events")
+  @EventType(context = "ordering", name = "OrderShipped", version = 1)
   record OrderShipped(String orderId) implements IntegrationEvent {}
 
   @SpringBootConfiguration
@@ -94,7 +92,7 @@ class OutboxTest {
     publish(new OrderPlaced("o-1", 2));
     Map<String, Object> written = row("persimmon_outbox", "id");
     assertEquals("ordering.OrderPlaced", written.get("TYPE"));
-    assertEquals("ordering", written.get("SOURCE"));
+    assertEquals("ordering", written.get("SOURCE"), "the source is the event's context, not the application");
     assertEquals("cmd-1", written.get("CORRELATION_ID"));
     assertEquals("cmd-1", written.get("CAUSATION_ID"));
     assertEquals(false, written.get("SENT"));
@@ -187,7 +185,7 @@ class OutboxTest {
   }
 
   @Test
-  void anExternalizedEventIsDeadLetteredWhileNoBrokerDispatcherIsPresent() {
+  void aRoutedEventIsDeadLetteredWhileNoBrokerDispatcherIsPresent() {
     publish(new OrderShipped("o-1"));
     assertEquals("ordering.events", row("persimmon_outbox", "id").get("DESTINATION"));
     relay.relay();

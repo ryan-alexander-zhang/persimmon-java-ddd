@@ -8,6 +8,11 @@ persimmon:
     outbox:
       cleanup:
         enabled: true
+      # Integration events stay in process until a type (or a "context.*" prefix) is routed to an
+      # external destination; then a messaging module delivers it there. The day a context moves to
+      # its own service, this is the line that changes:
+      # routes:
+      #   "ordering.*": ordering.events
     # Multi-tenancy is off: every row is tenant '__root__'. To turn it on, set enabled: true and
     # either trust-header: true behind a gateway that owns X-Tenant-Id, or declare a TenantResolver bean.
     tenancy:

@@ -30,7 +30,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @SpringBootTest
 @AutoConfigureObservability
 class OutboxTracingTest {
-  @EventType(name = "ordering.Traced", version = 1)
+  @EventType(context = "ordering", name = "Traced", version = 1)
   record Traced(String id) implements IntegrationEvent {}
 
   @SpringBootConfiguration
