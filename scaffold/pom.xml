@@ -56,6 +56,10 @@
       <groupId>com.persimmon.ddd</groupId>
       <artifactId>persimmon-ddd-flyway</artifactId>
     </dependency>
+    <dependency>
+      <groupId>com.persimmon.ddd</groupId>
+      <artifactId>persimmon-ddd-openapi</artifactId>
+    </dependency>
     <!-- Add flyway-database-postgresql or flyway-mysql with the matching driver. -->
     <dependency>
       <groupId>org.flywaydb</groupId>

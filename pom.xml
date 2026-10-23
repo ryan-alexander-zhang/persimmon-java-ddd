@@ -20,6 +20,7 @@
     <module>persimmon-ddd-outbox</module>
     <module>persimmon-ddd-archunit</module>
     <module>persimmon-ddd-flyway</module>
+    <module>persimmon-ddd-openapi</module>
     <module>persimmon-ddd-bom</module>
   </modules>
 
@@ -30,10 +31,16 @@
     <spring-boot.version>3.5.10</spring-boot.version>
     <mybatis-plus.version>3.5.15</mybatis-plus.version>
     <archunit.version>1.4.0</archunit.version>
+    <springdoc.version>2.8.9</springdoc.version>
   </properties>
 
   <dependencyManagement>
     <dependencies>
+      <dependency>
+        <groupId>org.springdoc</groupId>
+        <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        <version>${springdoc.version}</version>
+      </dependency>
       <dependency>
         <groupId>com.tngtech.archunit</groupId>
         <artifactId>archunit-junit5</artifactId>

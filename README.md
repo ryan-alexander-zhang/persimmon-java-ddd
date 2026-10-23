@@ -12,6 +12,7 @@ time. Group id `com.persimmon.ddd`.
 | `persimmon-ddd-spring-boot-starter` | Auto-configures `CommandBus`/`QueryBus` from handler beans, logging + validation + transaction interceptors, `UnitOfWork`, Spring-event `DomainEvents`, UUIDv7 `IdGenerator` | application, Spring Boot |
 | `persimmon-ddd-outbox` | Transactional outbox: `IntegrationEvents` writes a row with the command, a leased relay delivers it in process (or to a broker module), retries with backoff, dead-letters, replays, inbox dedup, optional cleanup; SQL under `persimmon/db/outbox/` | application, MyBatis-Plus starter |
 | `persimmon-ddd-flyway` | Applies every module's `persimmon/db/migration/<component>/<vendor>` through Flyway after the application's own migrations, one history table per component | Flyway |
+| `persimmon-ddd-openapi` | springdoc with the `ProblemDetail` schema and the default problem responses attached to every operation | web, springdoc |
 | `persimmon-ddd-archunit` | `PersimmonDddRules.all()` plus one rule per concern, for a project's own ArchUnit test | application, ArchUnit (test scope in consumers) |
 | `persimmon-ddd-bom` | Versions of the modules above, nothing else | |
 
@@ -100,6 +101,12 @@ it with `mvn test -f scaffold/pom.xml` after `mvn install` here.
 - Every component found on the classpath is applied; no `components` allow-list. A module you
   do not want is a module you do not depend on. `persimmon.ddd.flyway.enabled=false` opts out.
 - No properties class: history table prefix and baseline are fixed.
+
+## Changes from `aipersimmon-ddd-openapi-spring-boot-starter`
+
+- Default responses are 400, 404, 409, 422 and 500 from `ProblemDescriptor.of(category)`; the
+  429 is gone with the rate limiter. No `persimmon.ddd.openapi.*` properties; `springdoc.*` and a
+  `ProblemResponsesCustomizer` bean of your own are the levers.
 
 ## Changes from `aipersimmon-ddd-archunit`, `aipersimmon-ddd-test`, `aipersimmon-ddd-test-support`
 

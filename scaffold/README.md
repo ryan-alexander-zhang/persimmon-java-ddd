@@ -15,7 +15,7 @@ place, read, confirm, conflict, validation, not-found, and the outbox relaying `
 
 ```
 mvn test
-mvn spring-boot:run
+mvn spring-boot:run          # Swagger UI at /swagger-ui.html, spec at /v3/api-docs
 curl -X POST localhost:8080/orders -H 'content-type: application/json' \
   -d '{"customerId":"c-1","lines":[{"sku":"A","quantity":2}]}'
 ```
