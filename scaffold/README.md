@@ -20,6 +20,8 @@ curl -X POST localhost:8080/orders -H 'content-type: application/json' \
   -d '{"customerId":"c-1","lines":[{"sku":"A","quantity":2}]}'
 ```
 
+Tenancy: the tables already carry `tenant_id`; `persimmon.ddd.tenancy.enabled=true` scopes them per request.
+
 Schema: your tables are Flyway migrations under `db/migration`; the persimmon tables apply
 themselves after yours through `persimmon-ddd-flyway`. To go to PostgreSQL or MySQL, swap the H2
 dependency for the driver plus `flyway-database-postgresql` or `flyway-mysql`, and point

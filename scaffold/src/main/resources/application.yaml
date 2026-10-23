@@ -8,3 +8,8 @@ persimmon:
     outbox:
       cleanup:
         enabled: true
+    # Multi-tenancy is off: every row is tenant '__root__'. To turn it on, set enabled: true and
+    # either trust-header: true behind a gateway that owns X-Tenant-Id, or declare a TenantResolver bean.
+    tenancy:
+      enabled: false
+      tables: [orders, order_line]

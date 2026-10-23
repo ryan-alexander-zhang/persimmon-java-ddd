@@ -13,6 +13,7 @@ time. Group id `com.persimmon.ddd`.
 | `persimmon-ddd-outbox` | Transactional outbox: `IntegrationEvents` writes a row with the command, a leased relay delivers it in process (or to a broker module), retries with backoff, dead-letters, replays, inbox dedup, optional cleanup; SQL under `persimmon/db/outbox/` | application, MyBatis-Plus starter |
 | `persimmon-ddd-flyway` | Applies every module's `persimmon/db/migration/<component>/<vendor>` through Flyway after the application's own migrations, one history table per component | Flyway |
 | `persimmon-ddd-openapi` | springdoc with the `ProblemDetail` schema and the default problem responses attached to every operation | web, springdoc |
+| `persimmon-ddd-tenancy` | Off until `persimmon.ddd.tenancy.enabled=true`: tenant per request into `TenantContext`, listed tables scoped by `tenant_id` in SQL, a guard for tables nobody decided about | persistence-mybatis-plus, Spring MVC |
 | `persimmon-ddd-archunit` | `PersimmonDddRules.all()` plus one rule per concern, for a project's own ArchUnit test | application, ArchUnit (test scope in consumers) |
 | `persimmon-ddd-bom` | Versions of the modules above, nothing else | |
 
@@ -107,6 +108,16 @@ it with `mvn test -f scaffold/pom.xml` after `mvn install` here.
 - Default responses are 400, 404, 409, 422 and 500 from `ProblemDescriptor.of(category)`; the
   429 is gone with the rate limiter. No `persimmon.ddd.openapi.*` properties; `springdoc.*` and a
   `ProblemResponsesCustomizer` bean of your own are the levers.
+
+## Changes from `aipersimmon-ddd-tenancy` + `tenancy-spring-boot-starter` + `tenancy-mybatis-plus`
+
+- `TenantId` and `TenantContext` live in `application` (so the outbox can read them); the module
+  holds the Spring and MyBatis-Plus parts. `Tenants` is folded into `TenantId.of` / `TenantId.ROOT`.
+- `TenantResolver` takes the `HttpServletRequest`; no `TenantResolutionContext` abstraction.
+- `CommandContext` carries no tenant; the outbox row does, and the dispatcher rebinds it. There is
+  no command interceptor for it.
+- Kept on purpose: refusing to start on an untrusted header without a resolver, the excluded-path
+  bypass check, the tenant-table guard, the task decorator.
 
 ## Changes from `aipersimmon-ddd-archunit`, `aipersimmon-ddd-test`, `aipersimmon-ddd-test-support`
 

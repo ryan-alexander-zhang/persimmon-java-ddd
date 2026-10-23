@@ -15,6 +15,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.MockMvcBuilderCustomizer;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -28,6 +29,12 @@ class OrderingFlowTest {
   @TestConfiguration
   static class Probe {
     final List<EventEnvelope<OrderConfirmedEvent>> confirmed = new CopyOnWriteArrayList<>();
+
+    /** Every request names a tenant: harmless while tenancy is off, required once it is on. */
+    @Bean
+    MockMvcBuilderCustomizer tenantHeader() {
+      return builder -> builder.defaultRequest(get("/").header("X-Tenant-Id", "acme"));
+    }
 
     @Bean
     Object confirmedProbe() {
