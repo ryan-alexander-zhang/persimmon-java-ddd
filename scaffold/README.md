@@ -8,7 +8,7 @@ be imported, so the layer arrows and the context boundaries hold at compile time
 example-app/
   ordering/                     the sample context
     ordering-domain/            Order aggregate, value objects, domain events, error codes, the Orders port   -> persimmon-ddd-core only
-    ordering-api/               integration events (and interfaces) other contexts may use                   -> persimmon-ddd-application
+    ordering-api/               OrderConfirmedEvent; OrderLookup + OrderSummary for synchronous calls        -> persimmon-ddd-application
     ordering-application/       commands, queries, handlers, read models, domain event handlers              -> domain, api
     ordering-infrastructure/    MyBatis rows and mappers, Orders implementation, db/migration/ordering/      -> application, persimmon-ddd-persistence-mybatis-plus
     ordering-adapter/           REST controller, integration event listeners                                 -> application, Spring MVC
@@ -19,9 +19,11 @@ example-app/
 Rules a second context lives by, all checked by `ArchitectureTest`:
 
 - a context depends on another only through that context's `-api` module: integration events and,
-  for synchronous calls, an interface plus DTOs the provider implements as a bean;
+  for synchronous calls, an interface plus record DTOs the provider implements as a bean
+  (`OrderLookup`, implemented by `OrderLookupService`); nothing but interfaces, records and enums
+  may live in `..api..`;
 - a context owns its tables and its migrations (`db/migration/<context>/V<yyyyMMddNNN>__*.sql`);
-  no cross-context joins;
+  its `@TableName` rows stay in its `-infrastructure` module, so no other context can join them;
 - contexts talk through integration events on the outbox. In one process they are delivered in
   process; the day a context becomes a service, add `persimmon-ddd-kafka` to both deployables,
   route its events with `persimmon.ddd.outbox.routes`, and list the topics the other side consumes

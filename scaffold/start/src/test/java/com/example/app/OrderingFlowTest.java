@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.example.app.ordering.api.OrderConfirmedEvent;
+import com.example.app.ordering.api.OrderLookup;
 import com.persimmon.ddd.application.EventEnvelope;
 import com.persimmon.ddd.outbox.OutboxRelay;
 import java.util.List;
@@ -50,6 +51,7 @@ class OrderingFlowTest {
   @Autowired MockMvc mvc;
   @Autowired OutboxRelay relay;
   @Autowired Probe probe;
+  @Autowired OrderLookup lookup;
 
   private static final String ORDER =
       "{\"customerId\":\"c-1\",\"lines\":[{\"sku\":\"A\",\"quantity\":2},{\"sku\":\"B\",\"quantity\":1}]}";
@@ -76,6 +78,7 @@ class OrderingFlowTest {
 
     relay.relay();
     assertEquals(id, probe.confirmed.get(0).payload().orderId());
+    assertEquals("CONFIRMED", lookup.find(id).orElseThrow().status());
   }
 
   @Test

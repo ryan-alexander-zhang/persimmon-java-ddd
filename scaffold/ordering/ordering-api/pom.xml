@@ -11,7 +11,7 @@
     <relativePath>../pom.xml</relativePath>
   </parent>
 
-  <!-- Published contract: integration events other contexts consume. No internals. -->
+  <!-- Published contract: integration events, and interfaces plus DTOs for synchronous calls, that other contexts consume. No internals. -->
   <artifactId>ordering-api</artifactId>
 
   <dependencies>
