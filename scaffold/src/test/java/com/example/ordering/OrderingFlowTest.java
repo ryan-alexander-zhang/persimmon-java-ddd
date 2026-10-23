@@ -67,7 +67,9 @@ class OrderingFlowTest {
         .andExpect(jsonPath("$.status").value("PLACED"))
         .andExpect(jsonPath("$.lines", hasSize(2)));
 
-    mvc.perform(post("/orders/" + id + "/confirm")).andExpect(status().isNoContent());
+    mvc.perform(post("/orders/" + id + "/confirm").header("Idempotency-Key", "confirm-1")).andExpect(status().isNoContent());
+    mvc.perform(post("/orders/" + id + "/confirm").header("Idempotency-Key", "confirm-1"))
+        .andExpect(status().isNoContent());
     mvc.perform(post("/orders/" + id + "/confirm"))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("ordering.order-not-confirmable"));

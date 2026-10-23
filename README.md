@@ -14,6 +14,7 @@ time. Group id `com.persimmon.ddd`.
 | `persimmon-ddd-flyway` | Applies every module's `persimmon/db/migration/<component>/<vendor>` through Flyway after the application's own migrations, one history table per component | Flyway |
 | `persimmon-ddd-openapi` | springdoc with the `ProblemDetail` schema and the default problem responses attached to every operation | web, springdoc |
 | `persimmon-ddd-tenancy` | Off until `persimmon.ddd.tenancy.enabled=true`: tenant per request into `TenantContext`, listed tables scoped by `tenant_id` in SQL, a guard for tables nobody decided about | persistence-mybatis-plus, Spring MVC |
+| `persimmon-ddd-idempotency` | `Idempotency-Key` filter for unsafe methods: first call runs, same-body retries replay the stored response, different body is 422, in flight is 409; MyBatis-Plus store, migrations under `persimmon/db/migration/idempotency/` | web, persistence-mybatis-plus |
 | `persimmon-ddd-archunit` | `PersimmonDddRules.all()` plus one rule per concern, for a project's own ArchUnit test | application, ArchUnit (test scope in consumers) |
 | `persimmon-ddd-bom` | Versions of the modules above, nothing else | |
 
@@ -57,8 +58,8 @@ it with `mvn test -f scaffold/pom.xml` after `mvn install` here.
 - `ProblemDescriptor` carries a literal title; no `MessageSource` title keys.
 - Removed: `ApiException` and `ApiError` (throw a coded `DomainException`; `ProblemDetail` is the
   model), `ProblemRegistry`, `request-id.generate-if-absent` (always generated).
-- Not yet ported: idempotency, rate limiting, replay protection and their stores. They come as
-  their own component when needed.
+- Idempotency is its own module (`persimmon-ddd-idempotency`); rate limiting and signed-request
+  replay protection are not ported (a gateway and the webhook adapter own those).
 
 ## Changes from `aipersimmon-ddd-persistence-mybatis-plus` + `aipersimmon-ddd-mybatis-plus-spring-boot-starter`
 
@@ -121,6 +122,13 @@ it with `mvn test -f scaffold/pom.xml` after `mvn install` here.
   no command interceptor for it.
 - Kept on purpose: refusing to start on an untrusted header without a resolver, the excluded-path
   bypass check, the tenant-table guard, the task decorator.
+
+## Changes from the idempotency parts of `aipersimmon-ddd-web*` and `web-store-*`
+
+- One module, one store (MyBatis-Plus). No in-memory or Redis store, no startup warning about
+  per-instance state. The principal comes from `HttpServletRequest.getUserPrincipal()`; no Spring
+  Security dependency or resolver SPI. On by default when on the classpath.
+- Expired rows are purged on a schedule; the old design relied on claim-time deletes only.
 
 ## Changes from `aipersimmon-ddd-archunit`, `aipersimmon-ddd-test`, `aipersimmon-ddd-test-support`
 

@@ -11,7 +11,8 @@ A persimmon-ddd service with one bounded context, `ordering`, layered by package
 | `adapter` | REST controller, integration event listeners | application |
 
 `ArchitectureTest` enforces the arrows. `OrderingFlowTest` drives the whole thing on H2:
-place, read, confirm, conflict, validation, not-found, and the outbox relaying `OrderConfirmedEvent`.
+place, read, confirm (twice with one `Idempotency-Key`), conflict, validation, not-found, and the
+outbox relaying `OrderConfirmedEvent`.
 
 ```
 mvn test
