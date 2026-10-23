@@ -41,5 +41,10 @@
       <artifactId>spring-context</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>com.baomidou</groupId>
+      <artifactId>mybatis-plus-annotation</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 </project>

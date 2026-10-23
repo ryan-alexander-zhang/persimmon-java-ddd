@@ -70,6 +70,7 @@ public final class PersimmonDddRules {
   private static final String EVENT_LISTENER = "org.springframework.context.event.EventListener";
   private static final String CONTROLLER = "org.springframework.stereotype.Controller";
   private static final String REQUEST_MAPPING = "org.springframework.web.bind.annotation.RequestMapping";
+  private static final String TABLE_NAME = "com.baomidou.mybatisplus.annotation.TableName";
   private static final Set<String> AMBIENT_CALLS =
       Set.of(
           "java.lang.System#currentTimeMillis", "java.lang.System#nanoTime",
@@ -105,6 +106,8 @@ public final class PersimmonDddRules {
         .and(repositoryPortsShouldBeDomainInterfaces())
         .and(repositoryImplementationsShouldResideInInfrastructure())
         .and(adaptersShouldNotUseRepositoryPorts())
+        .and(persistenceRowsShouldResideInInfrastructure())
+        .and(apiPackagesShouldHoldOnlyContracts())
         .and(dependenciesShouldBeConstructorInjected());
   }
 
@@ -395,6 +398,13 @@ public final class PersimmonDddRules {
         .allowEmptyShould(true);
   }
 
+  /** A table row class is the shape of one context's storage; it never crosses a layer. */
+  public static ArchRule persistenceRowsShouldResideInInfrastructure() {
+    return classes().that().areAnnotatedWith(TABLE_NAME).should().resideInAPackage("..infrastructure..")
+        .as("@TableName row classes should reside in the infrastructure layer")
+        .allowEmptyShould(true);
+  }
+
   // ----- injection -----
 
   public static ArchRule dependenciesShouldBeConstructorInjected() {
@@ -409,6 +419,14 @@ public final class PersimmonDddRules {
   }
 
   // ----- bounded contexts -----
+
+  /** The contract another context compiles against: events, DTOs and call interfaces, never behaviour. */
+  public static ArchRule apiPackagesShouldHoldOnlyContracts() {
+    return classes().that().resideInAPackage("..api..")
+        .should().beInterfaces().orShould().beRecords().orShould().beEnums()
+        .as("..api.. packages should hold only interfaces, records, enums and annotations")
+        .allowEmptyShould(true);
+  }
 
   /** Contexts under {@code basePackage} (one sub-package each) may only use another's {@code .api} package. */
   public static ArchRule boundedContextsShouldDependOnEachOtherOnlyThroughApi(String basePackage) {

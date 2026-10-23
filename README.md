@@ -150,9 +150,10 @@ it with `mvn test -f scaffold/pom.xml` after `mvn install` here.
 
 ## Changes from `aipersimmon-ddd-archunit`, `aipersimmon-ddd-test`, `aipersimmon-ddd-test-support`
 
-- One class, `PersimmonDddRules`, 25 rules in `all()` and a bounded-context rule that takes the
+- One class, `PersimmonDddRules`, 27 rules in `all()` and a bounded-context rule that takes the
   base package. Rules about dropped modules (operation log, process manager, tenancy, `sendAs`,
-  `InvariantViolationException`, `@Projection`) are gone with them.
+  `InvariantViolationException`, `@Projection`) are gone with them. New: `..api..` packages hold
+  only interfaces, records and enums; `@TableName` rows reside in `..infrastructure..`.
 - `@ValueObject` types must be records or enums; that replaces the separate immutability and
   equals/hashCode rules.
 - Dropped: `PackageInfoChecks` (a source-tree check, not architecture), `ModuleNamingChecks`,

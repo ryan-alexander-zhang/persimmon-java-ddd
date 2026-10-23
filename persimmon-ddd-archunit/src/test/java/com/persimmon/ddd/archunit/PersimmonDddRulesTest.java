@@ -36,6 +36,8 @@ class PersimmonDddRulesTest {
             PersimmonDddRules::commandHandlersShouldNotDependOnOtherCommandHandlers,
             PersimmonDddRules::readModelsAndQueryResultsShouldNotBeTheWriteModel,
             PersimmonDddRules::controllerSignaturesShouldNotExposeTheWriteModel,
+            PersimmonDddRules::persistenceRowsShouldResideInInfrastructure,
+            PersimmonDddRules::apiPackagesShouldHoldOnlyContracts,
             PersimmonDddRules::dependenciesShouldBeConstructorInjected);
     for (Supplier<ArchRule> rule : rules) {
       EvaluationResult result = rule.get().evaluate(BAD);
