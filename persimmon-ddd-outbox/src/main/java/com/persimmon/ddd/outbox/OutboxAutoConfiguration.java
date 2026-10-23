@@ -1,6 +1,8 @@
 package com.persimmon.ddd.outbox;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.persimmon.ddd.application.CommandBus;
+import com.persimmon.ddd.application.CommandScheduler;
 import com.persimmon.ddd.application.IntegrationEvent;
 import com.persimmon.ddd.application.IntegrationEvents;
 import com.persimmon.ddd.core.IdGenerator;
@@ -104,6 +106,19 @@ public class OutboxAutoConfiguration {
         traces.getIfAvailable(() -> TraceContextCarrier.NOOP));
   }
 
+  @Bean
+  @ConditionalOnMissingBean
+  public CommandScheduler persimmonCommandScheduler(
+      OutboxStore store,
+      ObjectProvider<ObjectMapper> json,
+      IdGenerator ids,
+      Clock persimmonOutboxClock,
+      ObjectProvider<TraceContextCarrier> traces) {
+    return new ScheduledCommandWriter(
+        store, json.getIfAvailable(ObjectMapper::new), ids, persimmonOutboxClock,
+        traces.getIfAvailable(() -> TraceContextCarrier.NOOP));
+  }
+
   /** Every {@link IntegrationEvent} class under the application's packages, by (type, version). */
   @Bean
   @ConditionalOnMissingBean
@@ -141,7 +156,8 @@ public class OutboxAutoConfiguration {
       PlatformTransactionManager transactionManager,
       Clock persimmonOutboxClock,
       ConsumerName consumer,
-      ConfigurableListableBeanFactory beanFactory) {
+      ConfigurableListableBeanFactory beanFactory,
+      CommandBus commands) {
     return new InProcessOutboxDispatcher(
         publisher,
         json.getIfAvailable(ObjectMapper::new),
@@ -150,7 +166,8 @@ public class OutboxAutoConfiguration {
         new TransactionTemplate(transactionManager),
         persimmonOutboxClock,
         consumer.value(),
-        new Upcasters(upcasterBeans(beanFactory)));
+        new Upcasters(upcasterBeans(beanFactory)),
+        commands);
   }
 
   /** Every {@link EventUpcaster} bean with its type arguments, from the bean definition first so a {@code @Bean} lambda works. */

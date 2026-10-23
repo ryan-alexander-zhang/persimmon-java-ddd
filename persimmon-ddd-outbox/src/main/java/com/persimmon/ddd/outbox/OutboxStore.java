@@ -11,7 +11,12 @@ public interface OutboxStore {
   }
 
   /** Inside the caller's transaction. */
-  void insert(OutboxMessage message, Instant createdAt);
+  default void insert(OutboxMessage message, Instant createdAt) {
+    insert(message, createdAt, null);
+  }
+
+  /** Inside the caller's transaction; a {@code dueAt} keeps the row from being claimed before then. */
+  void insert(OutboxMessage message, Instant createdAt, Instant dueAt);
 
   /**
    * Leases up to {@code batchSize} due rows for {@code token} until {@code leaseUntil}, oldest

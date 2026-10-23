@@ -104,6 +104,11 @@ it with `mvn test -f scaffold/pom.xml` after `mvn install` here.
 - Schema ships as Flyway migrations under `persimmon/db/migration/outbox/{postgresql,mysql,h2}`;
   `persimmon-ddd-flyway` applies them, or point your own tool at them.
 - `publishAs` is not ported.
+- `CommandScheduler.schedule(command, at, context)` replaces the process-manager module: a
+  scheduled command is an outbox row due later (source `persimmon.command`, type the command
+  class), sent on the command bus by the same relay with the same retries, dead letters, inbox
+  dedup, tenant and trace. A saga is event handlers plus a deadline command whose handler checks
+  whether it still applies; no saga table, no cancel.
 
 ## Changes from `aipersimmon-ddd-messaging-kafka`
 

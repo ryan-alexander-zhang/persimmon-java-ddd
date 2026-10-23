@@ -6,7 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.persimmon.ddd.application.Command;
 import com.persimmon.ddd.application.CommandContext;
+import com.persimmon.ddd.application.CommandHandler;
+import com.persimmon.ddd.application.CommandScheduler;
 import com.persimmon.ddd.application.EventEnvelope;
 import com.persimmon.ddd.application.EventType;
 import com.persimmon.ddd.application.IntegrationEvent;
@@ -41,12 +44,22 @@ class OutboxTest {
   @EventType(context = "ordering", name = "OrderShipped", version = 1)
   record OrderShipped(String orderId) implements IntegrationEvent {}
 
+  record CancelOrder(String orderId) implements Command<Void> {}
+
   @SpringBootConfiguration
   @EnableAutoConfiguration
-  static class App {
+  static class App implements CommandHandler<CancelOrder, Void> {
     final List<EventEnvelope<OrderPlaced>> received = new ArrayList<>();
     final List<TenantId> tenants = new ArrayList<>();
+    final List<CommandContext> cancelled = new ArrayList<>();
     RuntimeException failWith;
+
+    @Override
+    public Void handle(CancelOrder command, CommandContext context) {
+      cancelled.add(context);
+      tenants.add(TenantContext.effective());
+      return null;
+    }
 
     @EventListener
     void on(EventEnvelope<OrderPlaced> envelope) {
@@ -60,6 +73,7 @@ class OutboxTest {
 
   @Autowired App app;
   @Autowired IntegrationEvents events;
+  @Autowired CommandScheduler scheduler;
   @Autowired OutboxRelay relay;
   @Autowired OutboxStore store;
   @Autowired TransactionTemplate tx;
@@ -72,6 +86,7 @@ class OutboxTest {
     }
     app.received.clear();
     app.tenants.clear();
+    app.cancelled.clear();
     app.failWith = null;
   }
 
@@ -112,6 +127,35 @@ class OutboxTest {
     relay.relay();
     assertEquals(List.of(TenantId.of("acme")), app.tenants);
     assertEquals("acme", app.received.get(0).tenantId());
+  }
+
+  @Test
+  void aScheduledCommandIsSentWhenDueAsAChildOfTheSchedulingContext() {
+    Instant now = Instant.now();
+    TenantContext.runAs(
+        TenantId.of("acme"),
+        () -> tx.executeWithoutResult(s -> {
+          scheduler.schedule(new CancelOrder("o-1"), now.plus(Duration.ofHours(1)), CommandContext.root("cmd-1"));
+          scheduler.schedule(new CancelOrder("o-2"), now.minusSeconds(1), CommandContext.root("cmd-2"));
+        }));
+    assertEquals(2, count("persimmon_outbox"));
+
+    assertEquals(1, relay.relay(), "only the due command is claimed");
+    assertEquals(1, app.cancelled.size());
+    assertEquals("cmd-2", app.cancelled.get(0).correlationId());
+    assertEquals(List.of(TenantId.of("acme")), app.tenants);
+    assertEquals(0, relay.relay(), "the other waits for its hour");
+    assertEquals(
+        ScheduledCommandWriter.SOURCE,
+        jdbc.queryForObject("SELECT source FROM persimmon_outbox WHERE sent = FALSE", String.class));
+  }
+
+  @Test
+  void aScheduledCommandWhoseClassIsGoneIsDeadLettered() {
+    tx.executeWithoutResult(s -> scheduler.schedule(new CancelOrder("o-1"), Instant.EPOCH, CommandContext.root("c")));
+    jdbc.update("UPDATE persimmon_outbox SET type = 'com.example.Gone'");
+    relay.relay();
+    assertEquals("PERMANENT", row("persimmon_dead_letter", "id").get("REASON"));
   }
 
   @Test

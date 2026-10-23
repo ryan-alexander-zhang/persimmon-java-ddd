@@ -2,6 +2,9 @@ package com.persimmon.ddd.outbox;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.persimmon.ddd.application.Command;
+import com.persimmon.ddd.application.CommandBus;
+import com.persimmon.ddd.application.CommandContext;
 import com.persimmon.ddd.application.EventEnvelope;
 import com.persimmon.ddd.application.IntegrationEvent;
 import com.persimmon.ddd.application.TenantContext;
@@ -11,13 +14,15 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.PayloadApplicationEvent;
 import org.springframework.core.ResolvableType;
 import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.util.ClassUtils;
 
 /**
  * Delivers to this process's {@code @EventListener}s as an {@code EventEnvelope<T>}, inside one
  * transaction with the inbox check, so a redelivered row is skipped and a failed delivery leaves
  * no inbox record behind. Listeners run under the tenant the row was written for; registered
  * upcasters move an older payload to the newest version first. A broker module hands records it
- * received to {@link #dispatch} too, so both legs deliver the same way.
+ * received to {@link #dispatch} too, so both legs deliver the same way. A scheduled command row is
+ * sent on the command bus under the same guard, as a child of the context that scheduled it.
  */
 public class InProcessOutboxDispatcher implements OutboxDispatcher {
   private final ApplicationEventPublisher publisher;
@@ -28,6 +33,7 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
   private final Clock clock;
   private final String consumer;
   private final Upcasters upcasters;
+  private final CommandBus commands;
 
   public InProcessOutboxDispatcher(
       ApplicationEventPublisher publisher,
@@ -37,7 +43,8 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
       TransactionOperations transactions,
       Clock clock,
       String consumer,
-      Upcasters upcasters) {
+      Upcasters upcasters,
+      CommandBus commands) {
     this.publisher = publisher;
     this.json = json;
     this.catalog = catalog;
@@ -46,6 +53,7 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
     this.clock = clock;
     this.consumer = consumer;
     this.upcasters = upcasters;
+    this.commands = commands;
   }
 
   /** Whether this process has a class for the contract; a broker consumer skips what it has none for. */
@@ -60,6 +68,12 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
 
   @Override
   public void dispatch(OutboxMessage message) {
+    if (ScheduledCommandWriter.SOURCE.equals(message.source())) {
+      Command<?> command = readCommand(message);
+      CommandContext cause = new CommandContext(message.eventId(), message.correlationId(), message.causationId());
+      onceUnderTenant(message, () -> commands.send(command, cause));
+      return;
+    }
     Class<? extends IntegrationEvent> type =
         catalog
             .lookup(message.type(), message.version())
@@ -87,14 +101,36 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
             message.causationId(),
             payload);
     ResolvableType eventType = ResolvableType.forClassWithGenerics(EventEnvelope.class, delivered);
+    onceUnderTenant(message, () -> publisher.publishEvent(new PayloadApplicationEvent<>(this, envelope, eventType)));
+  }
+
+  /** In one transaction with the inbox check, under the row's tenant; a row seen before is skipped. */
+  private void onceUnderTenant(OutboxMessage message, Runnable delivery) {
     TenantContext.runAs(
         new TenantId(message.tenantId()),
         () ->
             transactions.executeWithoutResult(
                 status -> {
                   if (!store.seenBefore(consumer, message.source(), message.eventId(), clock.instant())) {
-                    publisher.publishEvent(new PayloadApplicationEvent<>(this, envelope, eventType));
+                    delivery.run();
                   }
                 }));
+  }
+
+  private Command<?> readCommand(OutboxMessage message) {
+    Class<?> type;
+    try {
+      type = ClassUtils.forName(message.type(), null);
+    } catch (ClassNotFoundException | LinkageError e) {
+      throw new PermanentDispatchException("no local class for command " + message.type());
+    }
+    if (!Command.class.isAssignableFrom(type)) {
+      throw new PermanentDispatchException(message.type() + " is not a Command");
+    }
+    try {
+      return (Command<?>) json.readValue(message.payload(), type);
+    } catch (JsonProcessingException e) {
+      throw new PermanentDispatchException("unreadable payload of " + message.eventId() + ": " + e);
+    }
   }
 }

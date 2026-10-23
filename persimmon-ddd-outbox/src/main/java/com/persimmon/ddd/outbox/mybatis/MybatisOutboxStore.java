@@ -21,12 +21,13 @@ public class MybatisOutboxStore implements OutboxStore {
   }
 
   @Override
-  public void insert(OutboxMessage message, Instant createdAt) {
+  public void insert(OutboxMessage message, Instant createdAt, Instant dueAt) {
     OutboxRecord row = new OutboxRecord();
     copy(message, row);
     row.setSent(false);
     row.setAttempts(0);
     row.setCreatedAt(createdAt);
+    row.setNextAttemptAt(dueAt);
     outbox.insert(row);
   }
 
