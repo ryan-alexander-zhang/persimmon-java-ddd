@@ -14,6 +14,12 @@ time. Group id `com.persimmon.ddd`.
 | `persimmon-ddd-archunit` | `PersimmonDddRules.all()` plus one rule per concern, for a project's own ArchUnit test | application, ArchUnit (test scope in consumers) |
 | `persimmon-ddd-bom` | Versions of the modules above, nothing else | |
 
+## Scaffold
+
+`scaffold/` is a complete single-module service (`com.example:ordering-service`) built on the
+modules above: the template `persimmon create` stamps out. It is not part of this reactor; build
+it with `mvn test -f scaffold/pom.xml` after `mvn install` here.
+
 ## Changes from `aipersimmon-ddd-core`
 
 - One package `com.persimmon.ddd.core` plus `.annotation` (layer annotations moved there too).
@@ -102,6 +108,16 @@ time. Group id `com.persimmon.ddd`.
   `Supplier::get` lambda for `UnitOfWork` are the test doubles.
 - No `persimmon-ddd-test-support`: tests run on H2; a Postgres test is one Testcontainers field
   with Spring Boot's `@ServiceConnection`.
+
+## Changes from `aipersimmon-ddd-scaffold/multi-module`
+
+- One Maven module and one bounded context, layered by package, instead of three contexts times
+  five modules plus a process manager. The ArchUnit rules are package based, so the layering is
+  enforced just the same; split into modules when a context needs its own deployable.
+- Inherits `spring-boot-starter-parent` and imports `persimmon-ddd-bom`; no quality-plugin block.
+- H2 out of the box, `spring.sql.init` for the schema; no Flyway, Kafka, Postgres compose file or
+  OpenTelemetry wiring.
+- Not an archetype yet; `persimmon create` copies and renames it.
 
 ## Build
 
