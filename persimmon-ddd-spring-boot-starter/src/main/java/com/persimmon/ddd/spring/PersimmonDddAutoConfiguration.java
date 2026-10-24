@@ -16,6 +16,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
 import org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration;
 import org.springframework.boot.autoconfigure.validation.ValidationAutoConfiguration;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -33,6 +34,7 @@ import org.springframework.transaction.support.TransactionTemplate;
       TransactionAutoConfiguration.class,
       ValidationAutoConfiguration.class
     })
+@EnableConfigurationProperties(CommandProperties.class)
 public class PersimmonDddAutoConfiguration {
   @Bean
   @ConditionalOnMissingBean
@@ -58,6 +60,12 @@ public class PersimmonDddAutoConfiguration {
   @ConditionalOnBean(UnitOfWork.class)
   public TransactionCommandInterceptor persimmonTransactionCommandInterceptor(UnitOfWork unitOfWork) {
     return new TransactionCommandInterceptor(unitOfWork);
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  public ConflictRetryCommandInterceptor persimmonConflictRetryCommandInterceptor(CommandProperties properties) {
+    return new ConflictRetryCommandInterceptor(properties.conflictRetries());
   }
 
   @Bean

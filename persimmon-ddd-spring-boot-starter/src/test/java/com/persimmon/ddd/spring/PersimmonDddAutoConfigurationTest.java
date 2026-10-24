@@ -9,6 +9,7 @@ import com.persimmon.ddd.application.Command;
 import com.persimmon.ddd.application.CommandBus;
 import com.persimmon.ddd.application.CommandContext;
 import com.persimmon.ddd.application.CommandHandler;
+import com.persimmon.ddd.application.ConcurrencyConflictException;
 import com.persimmon.ddd.application.DomainEvents;
 import com.persimmon.ddd.application.Query;
 import com.persimmon.ddd.application.QueryBus;
@@ -42,6 +43,11 @@ class PersimmonDddAutoConfigurationTest {
 
   record CountOrders() implements Query<Integer> {}
 
+  /** Fails with a conflict {@code failures} times, then returns how many attempts it took. */
+  record Bump(int failures) implements Command<Integer> {}
+
+  record BumpInside(int failures) implements Command<Integer> {}
+
   @SpringBootConfiguration
   @EnableAutoConfiguration
   static class App {
@@ -63,6 +69,22 @@ class PersimmonDddAutoConfigurationTest {
         seen.add(context);
         return true;
       };
+    }
+
+    @Bean
+    CommandHandler<Bump, Integer> bumpHandler() {
+      return (command, context) -> {
+        seen.add("bump");
+        if (seen.stream().filter("bump"::equals).count() <= command.failures()) {
+          throw new ConcurrencyConflictException("lost the lock", null);
+        }
+        return (int) seen.stream().filter("bump"::equals).count();
+      };
+    }
+
+    @Bean
+    CommandHandler<BumpInside, Integer> bumpInsideHandler(CommandBus bus) {
+      return (command, context) -> bus.send(new Bump(command.failures()), context);
     }
 
     @Bean
@@ -100,6 +122,19 @@ class PersimmonDddAutoConfigurationTest {
   void anInvalidCommandIsRejectedBeforeItsHandler() {
     assertThrows(ConstraintViolationException.class, () -> commands.send(new Place(" ")));
     assertTrue(app.seen.isEmpty());
+  }
+
+  @Test
+  void aLostOptimisticLockIsRetriedInAFreshTransactionButNotInsideACallersTransaction() {
+    assertEquals(3, commands.send(new Bump(2)), "two conflicts, third attempt wins");
+    app.seen.clear();
+    assertEquals(4, commands.send(new Bump(3)), "three retries by default: four attempts");
+    app.seen.clear();
+    assertThrows(ConcurrencyConflictException.class, () -> commands.send(new Bump(4)), "the fifth is not tried");
+    app.seen.clear();
+    assertThrows(ConcurrencyConflictException.class, () -> commands.send(new BumpInside(4)));
+    assertEquals(4, app.seen.stream().filter("bump"::equals).count(),
+        "the inner command is not retried inside the caller's transaction; the outer one is, as a whole");
   }
 
   @Test
