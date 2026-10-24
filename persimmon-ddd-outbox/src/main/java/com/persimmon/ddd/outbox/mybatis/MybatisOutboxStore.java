@@ -118,6 +118,23 @@ public class MybatisOutboxStore implements OutboxStore {
     return ids.isEmpty() ? 0 : outbox.deleteByIds(ids);
   }
 
+  /** Portable across vendors (no DELETE ... LIMIT): deletes up to the {@code limit}-th oldest timestamp, ties included. */
+  @Override
+  public int deleteInboxBefore(Instant processedBefore, int limit) {
+    List<Object> oldest =
+        inbox.selectObjs(
+            new QueryWrapper<InboxRecord>()
+                .select("processed_at")
+                .lt("processed_at", processedBefore)
+                .orderByAsc("processed_at")
+                .last("LIMIT " + limit));
+    if (oldest.isEmpty()) {
+      return 0;
+    }
+    Object bound = oldest.get(oldest.size() - 1);
+    return inbox.delete(new QueryWrapper<InboxRecord>().lt("processed_at", processedBefore).le("processed_at", bound));
+  }
+
   @Override
   public boolean seenBefore(String consumer, String source, String messageKey, Instant now) {
     boolean seen =

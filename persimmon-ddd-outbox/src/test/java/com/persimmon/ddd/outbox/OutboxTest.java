@@ -285,4 +285,22 @@ public class OutboxTest {
     assertEquals(1, store.deleteSentBefore(Instant.now().minus(Duration.ofDays(7)), 100));
     assertEquals(1, count("persimmon_outbox"));
   }
+
+  @Test
+  void cleanupDeletesTheOldestInboxRecordsInBatches() {
+    for (int i = 0; i < 5; i++) {
+      publish(new OrderPlaced("o-" + i, 1));
+    }
+    relay.relay();
+    int perEvent = count("persimmon_inbox") / 5;
+    jdbc.update("UPDATE persimmon_inbox SET processed_at = ?",
+        java.sql.Timestamp.from(Instant.now().minus(Duration.ofDays(60))));
+    jdbc.update("UPDATE persimmon_inbox SET processed_at = ? WHERE message_key IN"
+        + " (SELECT event_id FROM persimmon_outbox WHERE subject = 'o-4')",
+        java.sql.Timestamp.from(Instant.now()));
+    Instant cutoff = Instant.now().minus(Duration.ofDays(30));
+    assertEquals(4 * perEvent, store.deleteInboxBefore(cutoff, 1), "one timestamp shared by the old rows: all of them go");
+    assertEquals(0, store.deleteInboxBefore(cutoff, 100));
+    assertEquals(perEvent, count("persimmon_inbox"), "the fresh event's records stay");
+  }
 }

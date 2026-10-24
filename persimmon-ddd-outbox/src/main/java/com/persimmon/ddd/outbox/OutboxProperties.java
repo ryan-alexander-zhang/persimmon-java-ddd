@@ -34,10 +34,12 @@ public record OutboxProperties(
 
   public record Retry(@DefaultValue("1s") Duration baseBackoff, @DefaultValue("1m") Duration maxBackoff) {}
 
-  /* Deletes sent rows older than retention; off unless enabled. */
+  /* Deletes sent rows older than retention and inbox records older than inboxRetention; off unless enabled. */
   public record Cleanup(
       @DefaultValue("false") boolean enabled,
       @DefaultValue("7d") Duration retention,
+      /* Must outlive the longest possible redelivery (a broker's retention); the inbox is the only dedup. */
+      @DefaultValue("30d") Duration inboxRetention,
       @DefaultValue("500") int batchSize,
       @DefaultValue("1h") Duration pollDelay) {}
 }

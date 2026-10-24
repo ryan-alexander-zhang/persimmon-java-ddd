@@ -37,6 +37,9 @@ public interface OutboxStore {
 
   int deleteSentBefore(Instant sentBefore, int limit);
 
+  /** Deletes about {@code limit} of the oldest inbox records processed before the cutoff. */
+  int deleteInboxBefore(Instant processedBefore, int limit);
+
   /** Records the message for the consumer; true when it was already recorded. */
   boolean seenBefore(String consumer, String source, String messageKey, Instant now);
 }

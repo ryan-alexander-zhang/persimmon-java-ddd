@@ -14,7 +14,7 @@ class OutboxPropertiesTest {
         new OutboxProperties(
             100, 10, Duration.ofSeconds(1), Duration.ofMinutes(5),
             new OutboxProperties.Retry(Duration.ofSeconds(1), Duration.ofMinutes(1)),
-            new OutboxProperties.Cleanup(false, Duration.ofDays(7), 500, Duration.ofHours(1)),
+            new OutboxProperties.Cleanup(false, Duration.ofDays(7), Duration.ofDays(30), 500, Duration.ofHours(1)),
             Map.of("ordering.*", "ordering.events", "ordering.OrderShipped", "shipping.events", "ordering.Order*", "orders"));
     assertEquals("shipping.events", p.destinationFor("ordering.OrderShipped"));
     assertEquals("orders", p.destinationFor("ordering.OrderPlaced"));

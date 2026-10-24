@@ -275,11 +275,14 @@ public class OutboxAutoConfiguration {
 
     @Scheduled(fixedDelayString = "${persimmon.ddd.outbox.cleanup.poll-delay:1h}")
     public void purge() {
-      Instant cutoff = clock.instant().minus(cleanup.retention());
+      Instant now = clock.instant();
       int deleted;
       do {
-        deleted = store.deleteSentBefore(cutoff, cleanup.batchSize());
+        deleted = store.deleteSentBefore(now.minus(cleanup.retention()), cleanup.batchSize());
       } while (deleted == cleanup.batchSize());
+      do {
+        deleted = store.deleteInboxBefore(now.minus(cleanup.inboxRetention()), cleanup.batchSize());
+      } while (deleted >= cleanup.batchSize());
     }
   }
 }
