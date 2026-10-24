@@ -1,11 +1,17 @@
 spring:
   application:
     name: ordering
+  datasource:
+    url: jdbc:h2:mem:ordering;DB_CLOSE_DELAY=-1
+management:
+  endpoints:
+    web:
+      exposure:
+        # /actuator/outbox lists, replays and discards dead letters; protect /actuator before going live.
+        include: [health, metrics, outbox]
 ordering:
   # An order not confirmed by then is cancelled by a scheduled command (see OrderPlacedHandler).
   confirmation-timeout: 30m
-  datasource:
-    url: jdbc:h2:mem:ordering;DB_CLOSE_DELAY=-1
 persimmon:
   ddd:
     outbox:

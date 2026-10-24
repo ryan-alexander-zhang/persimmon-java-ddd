@@ -91,6 +91,7 @@ class OrderingFlowTest {
 
     relay.relay();
     mvc.perform(get("/orders/" + id)).andExpect(jsonPath("$.status").value("CANCELLED"));
+    mvc.perform(get("/actuator/outbox")).andExpect(status().isOk()).andExpect(jsonPath("$.deadLetters").value(0));
   }
 
   @Test

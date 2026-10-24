@@ -61,6 +61,9 @@ curl -X POST localhost:8080/orders -H 'content-type: application/json' \
   -d '{"customerId":"c-1","lines":[{"sku":"A","quantity":2}]}'
 ```
 
+Operating: `/actuator/outbox` shows the dead letters (replay with `POST /actuator/outbox/{eventId}`),
+`/actuator/metrics/persimmon.outbox.lag.seconds` the relay's lag. See `GUIDE.md` in persimmon-java-ddd.
+
 Tenancy: the tables already carry `tenant_id`; `persimmon.ddd.tenancy.enabled=true` scopes them per request.
 
 Schema: your tables are Flyway migrations under `db/migration`; the persimmon tables apply
