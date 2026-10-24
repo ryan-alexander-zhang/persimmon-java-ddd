@@ -25,6 +25,7 @@ public class OutboxRelay {
   private final Clock clock;
   private final OutboxProperties properties;
   private final TraceContextCarrier traces;
+  private final OutboxMetrics metrics;
 
   public OutboxRelay(
       OutboxStore store,
@@ -33,7 +34,8 @@ public class OutboxRelay {
       RetryBackoff backoff,
       Clock clock,
       OutboxProperties properties,
-      TraceContextCarrier traces) {
+      TraceContextCarrier traces,
+      OutboxMetrics metrics) {
     this.store = store;
     this.dispatcher = dispatcher;
     this.failures = failures;
@@ -41,6 +43,7 @@ public class OutboxRelay {
     this.clock = clock;
     this.properties = properties;
     this.traces = traces;
+    this.metrics = metrics;
   }
 
   /** Returns how many rows were claimed; 0 means nothing was due. */
@@ -61,7 +64,9 @@ public class OutboxRelay {
               message.type() + " is destined for '" + message.destination() + "' but the active"
                   + " dispatcher stays in process; add the messaging module for that transport");
         }
+        long started = System.nanoTime();
         dispatch(message);
+        metrics.dispatched(message.type(), Duration.ofNanos(System.nanoTime() - started));
         delivered.add(message.eventId());
       } catch (RuntimeException e) {
         handleFailure(message, e);
@@ -101,12 +106,14 @@ public class OutboxRelay {
     if (reason == null) {
       Duration delay = backoff.nextDelay(attempts);
       store.scheduleRetry(message.eventId(), clock.instant().plus(delay));
+      metrics.retried(message.type());
       log.warn(
           "outbox dispatch of {} failed, retry {}/{} in {}ms",
           message.eventId(), attempts, properties.maxAttempts(), delay.toMillis(), error);
       return;
     }
     store.deadLetter(message, attempts, reason, summarize(error), clock.instant());
+    metrics.deadLettered(message.type(), reason);
     log.error("outbox dispatch of {} dead-lettered: {}", message.eventId(), reason, error);
   }
 

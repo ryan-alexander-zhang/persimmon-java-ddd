@@ -18,6 +18,8 @@ import com.persimmon.ddd.application.TenantContext;
 import com.persimmon.ddd.application.TenantId;
 import com.persimmon.ddd.outbox.billing.BillingListener;
 import com.persimmon.ddd.outbox.inventory.InventoryListener;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -69,6 +71,12 @@ public class OutboxTest {
       return new BillingListener();
     }
 
+    /** {@code @SpringBootTest} switches metrics off; the outbox gauges and counters need a registry. */
+    @Bean
+    MeterRegistry meterRegistry() {
+      return new SimpleMeterRegistry();
+    }
+
     @Bean
     InventoryListener inventory() {
       return new InventoryListener();
@@ -93,6 +101,8 @@ public class OutboxTest {
   @Autowired OutboxStore store;
   @Autowired TransactionTemplate tx;
   @Autowired JdbcTemplate jdbc;
+  @Autowired MeterRegistry meters;
+  @Autowired OutboxEndpoint endpoint;
 
   @BeforeEach
   void clean() {
@@ -202,6 +212,46 @@ public class OutboxTest {
     assertEquals("RETRIES_EXHAUSTED", dead.get("REASON"));
     assertEquals(3, dead.get("ATTEMPTS"));
     assertTrue(dead.get("LAST_ERROR").toString().contains("broker down"));
+  }
+
+  @Test
+  void theRelayReportsToMicrometerAndTheEndpointListsReplaysAndDiscardsDeadLetters() {
+    double deadLetteredBefore = counter("persimmon.outbox.dead_lettered");
+    long dispatchedBefore = dispatches();
+    publish(new OrderPlaced("o-1", 1));
+    publish(new OrderPlaced("o-2", 1));
+    assertEquals(2.0, meters.get("persimmon.outbox.pending").gauge().value());
+    assertTrue(meters.get("persimmon.outbox.lag.seconds").gauge().value() >= 0.0);
+
+    app.failWith = new PermanentDispatchException("gone");
+    relay.relay();
+    assertEquals(0.0, meters.get("persimmon.outbox.pending").gauge().value());
+    assertEquals(2.0, meters.get("persimmon.outbox.dead_letters").gauge().value());
+    assertEquals(deadLetteredBefore + 2, counter("persimmon.outbox.dead_lettered"));
+    assertEquals(dispatchedBefore, dispatches());
+
+    @SuppressWarnings("unchecked")
+    List<OutboxStore.DeadLetter> letters = (List<OutboxStore.DeadLetter>) endpoint.deadLetters().get("letters");
+    assertEquals(2, letters.size());
+    assertEquals("ordering.OrderPlaced", letters.get(0).type());
+    String first = letters.get(0).eventId();
+    String second = letters.get(1).eventId();
+    assertEquals(Map.of("eventId", first, "replayed", true), endpoint.replay(first));
+    assertEquals(Map.of("eventId", first, "replayed", false), endpoint.replay(first));
+    assertEquals(Map.of("eventId", second, "discarded", true), endpoint.discard(second));
+    assertEquals(0, count("persimmon_dead_letter"));
+
+    app.failWith = null;
+    relay.relay();
+    assertEquals(dispatchedBefore + 1, dispatches());
+  }
+
+  private double counter(String name) {
+    return meters.find(name).counters().stream().mapToDouble(c -> c.count()).sum();
+  }
+
+  private long dispatches() {
+    return meters.find("persimmon.outbox.dispatch").timers().stream().mapToLong(t -> t.count()).sum();
   }
 
   @Test

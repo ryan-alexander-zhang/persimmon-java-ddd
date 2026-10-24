@@ -195,7 +195,8 @@ public class OutboxAutoConfiguration {
       ObjectProvider<FailureClassifier> failures,
       Clock persimmonOutboxClock,
       OutboxProperties properties,
-      ObjectProvider<TraceContextCarrier> traces) {
+      ObjectProvider<TraceContextCarrier> traces,
+      ObjectProvider<OutboxMetrics> metrics) {
     return new OutboxRelay(
         store,
         dispatcher,
@@ -203,7 +204,33 @@ public class OutboxAutoConfiguration {
         new RetryBackoff(properties.retry().baseBackoff(), properties.retry().maxBackoff()),
         persimmonOutboxClock,
         properties,
-        traces.getIfAvailable(() -> TraceContextCarrier.NOOP));
+        traces.getIfAvailable(() -> TraceContextCarrier.NOOP),
+        metrics.getIfAvailable(() -> OutboxMetrics.NOOP));
+  }
+
+  /** With Micrometer on the classpath and a registry wired, the relay reports and the store is gauged. */
+  @Configuration(proxyBeanMethods = false)
+  @ConditionalOnClass(name = "io.micrometer.core.instrument.MeterRegistry")
+  static class Metrics {
+    @Bean
+    @ConditionalOnMissingBean(OutboxMetrics.class)
+    @ConditionalOnBean(io.micrometer.core.instrument.MeterRegistry.class)
+    OutboxMetrics persimmonOutboxMetrics(
+        io.micrometer.core.instrument.MeterRegistry registry, OutboxStore store, Clock persimmonOutboxClock) {
+      return new MicrometerOutboxMetrics(registry, store, persimmonOutboxClock);
+    }
+  }
+
+  /** With Actuator on the classpath: {@code /actuator/outbox} for the dead letters, once exposed. */
+  @Configuration(proxyBeanMethods = false)
+  @ConditionalOnClass(name = "org.springframework.boot.actuate.endpoint.annotation.Endpoint")
+  static class Endpoint {
+    @Bean
+    @ConditionalOnMissingBean
+    @org.springframework.boot.actuate.autoconfigure.endpoint.condition.ConditionalOnAvailableEndpoint
+    OutboxEndpoint persimmonOutboxEndpoint(OutboxStore store, Clock persimmonOutboxClock) {
+      return new OutboxEndpoint(store, persimmonOutboxClock);
+    }
   }
 
   /** With Micrometer Tracing on the classpath and wired, the trace crosses the outbox hop. */

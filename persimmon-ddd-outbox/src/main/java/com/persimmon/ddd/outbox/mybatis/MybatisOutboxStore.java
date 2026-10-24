@@ -6,6 +6,7 @@ import com.persimmon.ddd.outbox.OutboxMessage;
 import com.persimmon.ddd.outbox.OutboxStore;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.transaction.annotation.Transactional;
 
 /** The three tables behind the outbox. Column names are the SQL ones; see {@code persimmon/db/migration/outbox}. */
@@ -104,6 +105,57 @@ public class MybatisOutboxStore implements OutboxStore {
         now);
     deadLetters.deleteById(dead.getId());
     return true;
+  }
+
+  @Override
+  public boolean discard(String eventId) {
+    return deadLetters.delete(new QueryWrapper<DeadLetterRecord>().eq("event_id", eventId)) > 0;
+  }
+
+  @Override
+  public List<DeadLetter> deadLetters(int limit) {
+    return deadLetters
+        .selectList(new QueryWrapper<DeadLetterRecord>().orderByDesc("failed_at", "id").last("LIMIT " + limit))
+        .stream()
+        .map(d -> new DeadLetter(
+            d.getEventId(), d.getSource(), d.getType(), d.getVersion(), d.getSubject(), d.getCorrelationId(),
+            d.getTenantId(), d.getAttempts(), d.getReason(), d.getLastError(), d.getFailedAt()))
+        .toList();
+  }
+
+  @Override
+  public long countPending() {
+    return outbox.selectCount(new QueryWrapper<OutboxRecord>().eq("sent", false));
+  }
+
+  @Override
+  public long countDeadLetters() {
+    return deadLetters.selectCount(null);
+  }
+
+  @Override
+  public Optional<Instant> oldestPendingCreatedAt() {
+    return outbox
+        .selectObjs(new QueryWrapper<OutboxRecord>().select("created_at").eq("sent", false).orderByAsc("created_at").last("LIMIT 1"))
+        .stream()
+        .findFirst()
+        .map(MybatisOutboxStore::toInstant);
+  }
+
+  private static Instant toInstant(Object value) {
+    if (value instanceof Instant instant) {
+      return instant;
+    }
+    if (value instanceof java.sql.Timestamp timestamp) {
+      return timestamp.toInstant();
+    }
+    if (value instanceof java.time.LocalDateTime local) {
+      return local.toInstant(java.time.ZoneOffset.UTC);
+    }
+    if (value instanceof java.time.OffsetDateTime offset) {
+      return offset.toInstant();
+    }
+    throw new IllegalStateException("unexpected created_at type " + value.getClass());
   }
 
   @Override
