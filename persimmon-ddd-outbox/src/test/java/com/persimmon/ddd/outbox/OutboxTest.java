@@ -26,6 +26,14 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -185,8 +193,8 @@ public class OutboxTest {
   @Test
   void aScheduledCommandWhoseClassIsGoneIsDeadLetteredButARenamedOneStillArrives() {
     tx.executeWithoutResult(s -> {
-      scheduler.schedule(new CancelOrder("o-1"), Instant.EPOCH, CommandContext.root("c"));
-      scheduler.schedule(new CancelOrder("o-2"), Instant.EPOCH, CommandContext.root("c"));
+      scheduler.schedule(new CancelOrder("o-1"), Instant.now().minusSeconds(60), CommandContext.root("c"));
+      scheduler.schedule(new CancelOrder("o-2"), Instant.now().minusSeconds(60), CommandContext.root("c"));
     });
     jdbc.update("UPDATE persimmon_outbox SET type = 'com.example.Gone' WHERE payload LIKE '%o-1%'");
     jdbc.update("UPDATE persimmon_outbox SET type = ? WHERE payload LIKE '%o-2%'", CancelOrder.class.getName());
@@ -293,6 +301,43 @@ public class OutboxTest {
         app.received.stream().filter(e -> e.subject().equals("o-1")).map(e -> e.payload().lines()).toList();
     assertEquals(List.of(1, 2), o1);
     assertEquals(3, app.received.size());
+  }
+
+  /** Several instances poll at once: the two-step claim must hand each row to exactly one of them. */
+  @Test
+  void concurrentClaimsLeaseEveryRowExactlyOnce() throws Exception {
+    int rows = 60;
+    for (int i = 0; i < rows; i++) {
+      publish(new OrderPlaced("o-" + i, 1));
+    }
+    AtomicInteger total = new AtomicInteger();
+    Set<String> seen = ConcurrentHashMap.newKeySet();
+    List<String> duplicates = new java.util.concurrent.CopyOnWriteArrayList<>();
+    ExecutorService pool = Executors.newFixedThreadPool(4);
+    try {
+      List<Future<?>> workers = new ArrayList<>();
+      for (int t = 0; t < 4; t++) {
+        workers.add(pool.submit(() -> {
+          long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+          while (total.get() < rows && System.nanoTime() < deadline) {
+            Instant now = Instant.now();
+            for (OutboxMessage m : store.claim(now, 10, 5, UUID.randomUUID().toString(), now.plus(Duration.ofMinutes(5)))) {
+              if (!seen.add(m.eventId())) {
+                duplicates.add(m.eventId());
+              }
+              total.incrementAndGet();
+            }
+          }
+        }));
+      }
+      for (Future<?> worker : workers) {
+        worker.get(30, TimeUnit.SECONDS);
+      }
+    } finally {
+      pool.shutdownNow();
+    }
+    assertEquals(List.of(), duplicates, "no row leased twice");
+    assertEquals(rows, seen.size(), "every row leased");
   }
 
   @Test

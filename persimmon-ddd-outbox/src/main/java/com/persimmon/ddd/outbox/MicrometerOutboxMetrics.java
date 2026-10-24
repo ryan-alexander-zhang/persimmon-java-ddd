@@ -24,7 +24,7 @@ public final class MicrometerOutboxMetrics implements OutboxMetrics {
     Gauge.builder(
             "persimmon.outbox.lag.seconds",
             store,
-            s -> s.oldestPendingCreatedAt().map(t -> (double) Duration.between(t, clock.instant()).toSeconds()).orElse(0.0))
+            s -> s.oldestPendingCreatedAt().map(t -> Math.max(0.0, Duration.between(t, clock.instant()).toMillis() / 1000.0)).orElse(0.0))
         .description("age of the oldest unsent outbox row")
         .register(registry);
     Gauge.builder("persimmon.outbox.dead_letters", store, OutboxStore::countDeadLetters)

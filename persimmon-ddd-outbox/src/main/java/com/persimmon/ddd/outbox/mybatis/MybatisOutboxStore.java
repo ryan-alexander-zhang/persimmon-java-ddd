@@ -133,30 +133,16 @@ public class MybatisOutboxStore implements OutboxStore {
     return deadLetters.selectCount(null);
   }
 
+  /** Through the record, so the driver's timestamp conversion matches the one used when writing. */
   @Override
   public Optional<Instant> oldestPendingCreatedAt() {
     return outbox
-        .selectObjs(new QueryWrapper<OutboxRecord>().select("created_at").eq("sent", false).orderByAsc("created_at").last("LIMIT 1"))
+        .selectList(new QueryWrapper<OutboxRecord>().select("created_at").eq("sent", false).orderByAsc("created_at").last("LIMIT 1"))
         .stream()
         .findFirst()
-        .map(MybatisOutboxStore::toInstant);
+        .map(OutboxRecord::getCreatedAt);
   }
 
-  private static Instant toInstant(Object value) {
-    if (value instanceof Instant instant) {
-      return instant;
-    }
-    if (value instanceof java.sql.Timestamp timestamp) {
-      return timestamp.toInstant();
-    }
-    if (value instanceof java.time.LocalDateTime local) {
-      return local.toInstant(java.time.ZoneOffset.UTC);
-    }
-    if (value instanceof java.time.OffsetDateTime offset) {
-      return offset.toInstant();
-    }
-    throw new IllegalStateException("unexpected created_at type " + value.getClass());
-  }
 
   @Override
   public int deleteSentBefore(Instant sentBefore, int limit) {
@@ -173,8 +159,8 @@ public class MybatisOutboxStore implements OutboxStore {
   /** Portable across vendors (no DELETE ... LIMIT): deletes up to the {@code limit}-th oldest timestamp, ties included. */
   @Override
   public int deleteInboxBefore(Instant processedBefore, int limit) {
-    List<Object> oldest =
-        inbox.selectObjs(
+    List<InboxRecord> oldest =
+        inbox.selectList(
             new QueryWrapper<InboxRecord>()
                 .select("processed_at")
                 .lt("processed_at", processedBefore)
@@ -183,7 +169,7 @@ public class MybatisOutboxStore implements OutboxStore {
     if (oldest.isEmpty()) {
       return 0;
     }
-    Object bound = oldest.get(oldest.size() - 1);
+    Instant bound = oldest.get(oldest.size() - 1).getProcessedAt();
     return inbox.delete(new QueryWrapper<InboxRecord>().lt("processed_at", processedBefore).le("processed_at", bound));
   }
 

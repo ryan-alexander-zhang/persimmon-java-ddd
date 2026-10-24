@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS persimmon_idempotency (
     response_status  INT,
     response_body    LONGBLOB,
     response_headers TEXT,
-    created_at       TIMESTAMP    NOT NULL,
-    expires_at       TIMESTAMP    NOT NULL,
+    created_at       TIMESTAMP(6)    NOT NULL,
+    expires_at       TIMESTAMP(6)    NOT NULL,
     PRIMARY KEY (tenant_id, principal, idempotency_key)
 );

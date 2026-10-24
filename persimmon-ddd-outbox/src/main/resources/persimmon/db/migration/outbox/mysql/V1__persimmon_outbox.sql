@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS persimmon_outbox (
     type            VARCHAR(512) NOT NULL,
     version         INT          NOT NULL,
     payload         TEXT         NOT NULL,
-    occurred_at     TIMESTAMP    NOT NULL,
+    occurred_at     TIMESTAMP(6)    NOT NULL,
     subject         VARCHAR(255),
     correlation_id  VARCHAR(64)  NOT NULL,
     causation_id    VARCHAR(64),
@@ -15,12 +15,12 @@ CREATE TABLE IF NOT EXISTS persimmon_outbox (
     traceparent     VARCHAR(55),
     tracestate      VARCHAR(512),
     sent            BOOLEAN      NOT NULL DEFAULT FALSE,
-    sent_at         TIMESTAMP,
+    sent_at         TIMESTAMP(6),
     attempts        INT          NOT NULL DEFAULT 0,
-    next_attempt_at TIMESTAMP,
+    next_attempt_at TIMESTAMP(6),
     lease_token     VARCHAR(64),
-    lease_until     TIMESTAMP,
-    created_at      TIMESTAMP    NOT NULL
+    lease_until     TIMESTAMP(6),
+    created_at      TIMESTAMP(6)    NOT NULL
 );
 CREATE INDEX idx_persimmon_outbox_unsent ON persimmon_outbox (sent, next_attempt_at, created_at);
 CREATE INDEX idx_persimmon_outbox_subject ON persimmon_outbox (subject, sent, created_at, id);
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS persimmon_dead_letter (
     type            VARCHAR(512) NOT NULL,
     version         INT          NOT NULL,
     payload         TEXT         NOT NULL,
-    occurred_at     TIMESTAMP    NOT NULL,
+    occurred_at     TIMESTAMP(6)    NOT NULL,
     subject         VARCHAR(255),
     correlation_id  VARCHAR(64)  NOT NULL,
     causation_id    VARCHAR(64),
@@ -44,14 +44,14 @@ CREATE TABLE IF NOT EXISTS persimmon_dead_letter (
     attempts        INT          NOT NULL,
     reason          VARCHAR(32)  NOT NULL,
     last_error      TEXT,
-    failed_at       TIMESTAMP    NOT NULL
+    failed_at       TIMESTAMP(6)    NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS persimmon_inbox (
     consumer     VARCHAR(128) NOT NULL,
     source       VARCHAR(255) NOT NULL,
     message_key  VARCHAR(128) NOT NULL,
-    processed_at TIMESTAMP    NOT NULL,
+    processed_at TIMESTAMP(6)    NOT NULL,
     PRIMARY KEY (consumer, source, message_key)
 );
 CREATE INDEX idx_persimmon_inbox_processed_at ON persimmon_inbox (processed_at);

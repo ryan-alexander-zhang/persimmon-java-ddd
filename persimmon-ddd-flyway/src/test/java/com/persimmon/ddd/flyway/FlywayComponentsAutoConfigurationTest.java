@@ -27,8 +27,10 @@ class FlywayComponentsAutoConfigurationTest {
     assertEquals(
         List.of(
             "flyway_schema_history",
+            "flyway_schema_history_persimmon_idempotency",
             "flyway_schema_history_persimmon_outbox",
             "persimmon_dead_letter",
+            "persimmon_idempotency",
             "persimmon_inbox",
             "persimmon_outbox",
             "widget"),
