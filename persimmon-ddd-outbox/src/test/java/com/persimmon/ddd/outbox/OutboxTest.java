@@ -10,6 +10,7 @@ import com.persimmon.ddd.application.Command;
 import com.persimmon.ddd.application.CommandContext;
 import com.persimmon.ddd.application.CommandHandler;
 import com.persimmon.ddd.application.CommandScheduler;
+import com.persimmon.ddd.application.CommandType;
 import com.persimmon.ddd.application.EventEnvelope;
 import com.persimmon.ddd.application.EventType;
 import com.persimmon.ddd.application.IntegrationEvent;
@@ -49,7 +50,10 @@ public class OutboxTest {
   @EventType(context = "ordering", name = "OrderShipped", version = 1)
   record OrderShipped(String orderId) implements IntegrationEvent {}
 
+  @CommandType("ordering.CancelOrder")
   record CancelOrder(String orderId) implements Command<Void> {}
+
+  record RenamedLater(String orderId) implements Command<Void> {}
 
   @SpringBootConfiguration
   @EnableAutoConfiguration
@@ -173,17 +177,22 @@ public class OutboxTest {
     assertEquals("cmd-2", app.cancelled.get(0).correlationId());
     assertEquals(List.of(TenantId.of("acme")), app.tenants);
     assertEquals(0, relay.relay(), "the other waits for its hour");
-    assertEquals(
-        ScheduledCommandWriter.SOURCE,
-        jdbc.queryForObject("SELECT source FROM persimmon_outbox WHERE sent = FALSE", String.class));
+    Map<String, Object> waiting = row("persimmon_outbox", "id");
+    assertEquals(ScheduledCommandWriter.SOURCE, waiting.get("SOURCE"));
+    assertEquals("ordering.CancelOrder", waiting.get("TYPE"), "@CommandType names the row, not the class");
   }
 
   @Test
-  void aScheduledCommandWhoseClassIsGoneIsDeadLettered() {
-    tx.executeWithoutResult(s -> scheduler.schedule(new CancelOrder("o-1"), Instant.EPOCH, CommandContext.root("c")));
-    jdbc.update("UPDATE persimmon_outbox SET type = 'com.example.Gone'");
+  void aScheduledCommandWhoseClassIsGoneIsDeadLetteredButARenamedOneStillArrives() {
+    tx.executeWithoutResult(s -> {
+      scheduler.schedule(new CancelOrder("o-1"), Instant.EPOCH, CommandContext.root("c"));
+      scheduler.schedule(new CancelOrder("o-2"), Instant.EPOCH, CommandContext.root("c"));
+    });
+    jdbc.update("UPDATE persimmon_outbox SET type = 'com.example.Gone' WHERE payload LIKE '%o-1%'");
+    jdbc.update("UPDATE persimmon_outbox SET type = ? WHERE payload LIKE '%o-2%'", CancelOrder.class.getName());
     relay.relay();
     assertEquals("PERMANENT", row("persimmon_dead_letter", "id").get("REASON"));
+    assertEquals(1, app.cancelled.size(), "a row written under the old class name before @CommandType still resolves");
   }
 
   @Test

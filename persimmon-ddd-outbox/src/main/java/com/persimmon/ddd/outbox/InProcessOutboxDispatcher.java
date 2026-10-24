@@ -16,7 +16,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.PayloadApplicationEvent;
@@ -49,8 +48,7 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
   private final ContextNames contexts;
   private final Upcasters upcasters;
   private final CommandBus commands;
-  // ponytail: listeners are indexed on first delivery of a type; a listener registered later is missed
-  private final Map<Class<?>, List<Delivery>> deliveries = new ConcurrentHashMap<>();
+  private final CommandCatalog commandCatalog;
 
   /** One context's listeners for one event type. */
   private record Delivery(String consumer, List<GenericApplicationListener> listeners) {}
@@ -64,7 +62,8 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
       Clock clock,
       ContextNames contexts,
       Upcasters upcasters,
-      CommandBus commands) {
+      CommandBus commands,
+      CommandCatalog commandCatalog) {
     this.application = application;
     this.json = json;
     this.catalog = catalog;
@@ -74,6 +73,7 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
     this.contexts = contexts;
     this.upcasters = upcasters;
     this.commands = commands;
+    this.commandCatalog = commandCatalog;
   }
 
   /** Whether this process has a class for the contract; a broker consumer skips what it has none for. */
@@ -89,9 +89,18 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
   @Override
   public void dispatch(OutboxMessage message) {
     if (ScheduledCommandWriter.SOURCE.equals(message.source())) {
-      Command<?> command = readCommand(message);
+      Class<? extends Command<?>> type =
+          commandCatalog
+              .lookup(message.type())
+              .orElseThrow(() -> new PermanentDispatchException("no local command class for " + message.type()));
+      Command<?> command;
+      try {
+        command = json.readValue(message.payload(), type);
+      } catch (JsonProcessingException e) {
+        throw new PermanentDispatchException("unreadable payload of " + message.eventId() + ": " + e);
+      }
       CommandContext cause = new CommandContext(message.eventId(), message.correlationId(), message.causationId());
-      onceUnderTenant(contexts.of(message.type()), message, () -> commands.send(command, cause));
+      onceUnderTenant(contexts.of(type.getName()), message, () -> commands.send(command, cause));
       return;
     }
     Class<? extends IntegrationEvent> type =
@@ -121,7 +130,7 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
             message.causationId(),
             payload);
     PayloadApplicationEvent<?> event = new PayloadApplicationEvent<>(this, envelope, envelopeType(delivered));
-    for (Delivery delivery : deliveries.computeIfAbsent(delivered, this::deliveriesFor)) {
+    for (Delivery delivery : deliveriesFor(delivered)) {
       onceUnderTenant(
           delivery.consumer(), message, () -> delivery.listeners().forEach(l -> l.onApplicationEvent(event)));
     }
@@ -140,7 +149,7 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
                 }));
   }
 
-  /** The listeners of {@code EventEnvelope<delivered>}, grouped by context in name order, ordered within one. */
+  /** The listeners of {@code EventEnvelope<delivered>}, grouped by context in name order, ordered within one. Looked up per delivery, so a listener registered late is not missed. */
   private List<Delivery> deliveriesFor(Class<?> delivered) {
     ResolvableType eventType = ResolvableType.forClassWithGenerics(PayloadApplicationEvent.class, envelopeType(delivered));
     Map<String, List<GenericApplicationListener>> byConsumer = new TreeMap<>();
@@ -182,20 +191,4 @@ public class InProcessOutboxDispatcher implements OutboxDispatcher {
     return ResolvableType.forClassWithGenerics(EventEnvelope.class, delivered);
   }
 
-  private Command<?> readCommand(OutboxMessage message) {
-    Class<?> type;
-    try {
-      type = ClassUtils.forName(message.type(), null);
-    } catch (ClassNotFoundException | LinkageError e) {
-      throw new PermanentDispatchException("no local class for command " + message.type());
-    }
-    if (!Command.class.isAssignableFrom(type)) {
-      throw new PermanentDispatchException(message.type() + " is not a Command");
-    }
-    try {
-      return (Command<?>) json.readValue(message.payload(), type);
-    } catch (JsonProcessingException e) {
-      throw new PermanentDispatchException("unreadable payload of " + message.eventId() + ": " + e);
-    }
-  }
 }

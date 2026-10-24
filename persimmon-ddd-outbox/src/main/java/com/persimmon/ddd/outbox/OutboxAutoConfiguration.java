@@ -1,6 +1,7 @@
 package com.persimmon.ddd.outbox;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.persimmon.ddd.application.Command;
 import com.persimmon.ddd.application.CommandBus;
 import com.persimmon.ddd.application.CommandScheduler;
 import com.persimmon.ddd.application.IntegrationEvent;
@@ -119,30 +120,53 @@ public class OutboxAutoConfiguration {
         traces.getIfAvailable(() -> TraceContextCarrier.NOOP));
   }
 
+  /** Every {@link Command} class under the application's packages, by wire name and by class name. */
+  @Bean
+  @ConditionalOnMissingBean
+  @SuppressWarnings("unchecked")
+  public CommandCatalog persimmonCommandCatalog(BeanFactory beanFactory) {
+    Map<String, Class<? extends Command<?>>> byType = new HashMap<>();
+    for (Class<?> type : concreteClassesUnderApplication(beanFactory, Command.class)) {
+      for (String key : new java.util.LinkedHashSet<>(List.of(CommandCatalog.typeOf(type), type.getName()))) {
+        Class<?> previous = byType.put(key, (Class<? extends Command<?>>) type);
+        if (previous != null && previous != type) {
+          throw new IllegalStateException(previous.getName() + " and " + type.getName() + " both declare @CommandType " + key);
+        }
+      }
+    }
+    return type -> Optional.ofNullable(byType.get(type));
+  }
+
   /** Every {@link IntegrationEvent} class under the application's packages, by (type, version). */
   @Bean
   @ConditionalOnMissingBean
   public IntegrationEventCatalog persimmonIntegrationEventCatalog(BeanFactory beanFactory) {
     Map<String, Class<? extends IntegrationEvent>> byKey = new HashMap<>();
-    ClassPathScanningCandidateComponentProvider scanner =
-        new ClassPathScanningCandidateComponentProvider(false);
-    scanner.addIncludeFilter(new AssignableTypeFilter(IntegrationEvent.class));
-    for (String pkg : AutoConfigurationPackages.get(beanFactory)) {
-      for (BeanDefinition definition : scanner.findCandidateComponents(pkg)) {
-        Class<?> type = ClassUtils.resolveClassName(definition.getBeanClassName(), null);
-        if (type.isInterface()) {
-          continue;
-        }
-        IntegrationEvent.Contract contract = IntegrationEvent.contractOf(type);
-        Class<?> previous = byKey.put(contract.type() + "#" + contract.version(), type.asSubclass(IntegrationEvent.class));
-        if (previous != null && previous != type) {
-          throw new IllegalStateException(
-              previous.getName() + " and " + type.getName() + " both declare @EventType "
-                  + contract.type() + " v" + contract.version());
-        }
+    for (Class<?> type : concreteClassesUnderApplication(beanFactory, IntegrationEvent.class)) {
+      IntegrationEvent.Contract contract = IntegrationEvent.contractOf(type);
+      Class<?> previous = byKey.put(contract.type() + "#" + contract.version(), type.asSubclass(IntegrationEvent.class));
+      if (previous != null && previous != type) {
+        throw new IllegalStateException(
+            previous.getName() + " and " + type.getName() + " both declare @EventType "
+                + contract.type() + " v" + contract.version());
       }
     }
     return (type, version) -> Optional.ofNullable(byKey.get(type + "#" + version));
+  }
+
+  static List<Class<?>> concreteClassesUnderApplication(BeanFactory beanFactory, Class<?> marker) {
+    List<Class<?>> found = new java.util.ArrayList<>();
+    ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false);
+    scanner.addIncludeFilter(new AssignableTypeFilter(marker));
+    for (String pkg : AutoConfigurationPackages.get(beanFactory)) {
+      for (BeanDefinition definition : scanner.findCandidateComponents(pkg)) {
+        Class<?> type = ClassUtils.resolveClassName(definition.getBeanClassName(), null);
+        if (!type.isInterface()) {
+          found.add(type);
+        }
+      }
+    }
+    return found;
   }
 
   /** Always present: the relay's dispatcher when nothing else is, and the local leg of a broker module's dispatcher, which is {@code @Primary}. */
@@ -157,7 +181,8 @@ public class OutboxAutoConfiguration {
       Clock persimmonOutboxClock,
       ContextNames contexts,
       ConfigurableListableBeanFactory beanFactory,
-      CommandBus commands) {
+      CommandBus commands,
+      CommandCatalog commandCatalog) {
     return new InProcessOutboxDispatcher(
         application,
         json.getIfAvailable(ObjectMapper::new),
@@ -167,7 +192,8 @@ public class OutboxAutoConfiguration {
         persimmonOutboxClock,
         contexts,
         new Upcasters(upcasterBeans(beanFactory)),
-        commands);
+        commands,
+        commandCatalog);
   }
 
   /** Every {@link EventUpcaster} bean with its type arguments, from the bean definition first so a {@code @Bean} lambda works. */

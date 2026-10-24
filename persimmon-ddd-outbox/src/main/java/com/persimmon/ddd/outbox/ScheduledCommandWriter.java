@@ -12,8 +12,8 @@ import java.time.Instant;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
- * A scheduled command is an outbox row due later: source {@link #SOURCE}, type the command class,
- * no destination (it never leaves the process). The relay, retries, dead letters, inbox dedup,
+ * A scheduled command is an outbox row due later: source {@link #SOURCE}, type the command's wire
+ * name ({@link CommandCatalog#typeOf}), no destination (it never leaves the process). The relay, retries, dead letters, inbox dedup,
  * tenant and trace carry over unchanged.
  */
 public class ScheduledCommandWriter implements CommandScheduler {
@@ -36,7 +36,7 @@ public class ScheduledCommandWriter implements CommandScheduler {
 
   @Override
   public void schedule(Command<?> command, Instant at, CommandContext context) {
-    String type = command.getClass().getName();
+    String type = CommandCatalog.typeOf(command.getClass());
     if (!TransactionSynchronizationManager.isActualTransactionActive()) {
       throw new IllegalStateException(
           "no active transaction while scheduling " + type + "; the row must commit with the change that caused it");
