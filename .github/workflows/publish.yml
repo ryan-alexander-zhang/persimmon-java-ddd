@@ -17,13 +17,17 @@ jobs:
           java-version: '21'
           cache: maven
           server-id: github # distributionManagement in pom.xml; GITHUB_ACTOR and GITHUB_TOKEN are the credentials
-      - name: a tag names the release version
+      - name: a tag names the pom version without -SNAPSHOT, and becomes the release version
         if: startsWith(github.ref, 'refs/tags/v')
-        run: mvn -B versions:set -DnewVersion=${GITHUB_REF_NAME#v} -DgenerateBackupPoms=false
+        run: |
+          POM=$(mvn -B -q help:evaluate -Dexpression=project.version -DforceStdout)
+          [ "${POM%-SNAPSHOT}" = "${GITHUB_REF_NAME#v}" ] || { echo "tag $GITHUB_REF_NAME does not match pom version $POM"; exit 1; }
+          mvn -B versions:set -DnewVersion=${GITHUB_REF_NAME#v} -DgenerateBackupPoms=false
+          echo "PERSIMMON_DDD_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
       - run: mvn -B deploy
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: scaffold builds against what was deployed
-        run: mvn -B -f scaffold/pom.xml verify
+        run: mvn -B -f scaffold/pom.xml verify ${PERSIMMON_DDD_VERSION:+-Dpersimmon-ddd.version=$PERSIMMON_DDD_VERSION}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
