@@ -1,0 +1,168 @@
+name: Bug report
+description: Something persimmon-ddd does wrong, crashes on, or documents differently from what it does.
+title: "[module]: one line, the symptom not the guess"
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. A bug we can reproduce in minutes gets fixed in hours; one we cannot reproduce waits.
+        Fill in every section that applies. Paste text, not screenshots of text.
+
+  - type: checkboxes
+    id: before
+    attributes:
+      label: Before you file
+      options:
+        - label: I searched the open and closed issues and found no report of this.
+          required: true
+        - label: I reproduced it on the latest `main` snapshot or the latest release (not only on an older version).
+          required: true
+        - label: I read the relevant section of GUIDE.md and the behaviour still looks wrong.
+          required: true
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      description: Where the wrong behaviour lives. Pick the closest; several are fine.
+      multiple: true
+      options:
+        - persimmon-ddd-core
+        - persimmon-ddd-application
+        - persimmon-ddd-spring-boot-starter
+        - persimmon-ddd-web
+        - persimmon-ddd-persistence-mybatis-plus
+        - persimmon-ddd-outbox
+        - persimmon-ddd-kafka
+        - persimmon-ddd-flyway
+        - persimmon-ddd-openapi
+        - persimmon-ddd-tenancy
+        - persimmon-ddd-idempotency
+        - persimmon-ddd-archunit
+        - persimmon-ddd-bom
+        - scaffold / persimmon new
+        - documentation (README, GUIDE, javadoc)
+        - build / CI / publishing
+        - not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: persimmon-ddd version
+      description: The exact artifact version from your pom or the resolved snapshot (`mvn dependency:list | grep persimmon-ddd`), e.g. `0.1.0-SNAPSHOT (20261024.014537-7)` or `0.1.0`.
+      placeholder: 0.1.0-SNAPSHOT (20261024.014537-7)
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Fill in what applies. `java -version`, `mvn -version`, the Boot version your pom inherits, the database and its version, the broker if the outbox/kafka modules are involved.
+      value: |
+        - Java: 
+        - Maven: 
+        - Spring Boot: 
+        - Database (vendor + version, or H2): 
+        - Kafka (version, or none): 
+        - OS: 
+        - Running as (tests / `spring-boot:run` / jar in container): 
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened
+      description: The symptom, in the order you saw it. What you did, what the system did. One bug per issue.
+      placeholder: After confirming an order, the outbox row for OrderConfirmed stays unsent with attempts = 0 and the relay logs nothing ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: The behaviour you believe is correct, and why (a sentence of GUIDE.md, javadoc, or the principle of least surprise).
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: |
+        The fastest path for a maintainer to see the bug. In order of preference:
+        1. A link to a repository or branch: `persimmon new repro --lang java --framework ddd` plus the smallest change that shows it, with the command to run.
+        2. A failing test against the scaffold or against a module's test suite.
+        3. Exact numbered steps on the scaffold, from a clean checkout.
+        Code snippets alone (an aggregate, a handler) rarely suffice; include the config and the command.
+      placeholder: |
+        1. `persimmon new repro --lang java --framework ddd --group io.acme`
+        2. apply the attached patch (adds a listener in `billing` that throws)
+        3. `mvn -q test -pl start -Dtest=OrderingFlowTest`
+        4. observe: ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often
+      options:
+        - Always
+        - Often (more than half the time)
+        - Sometimes (timing, load or ordering dependent)
+        - Seen once
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and stack trace
+      description: The relevant log lines and the full stack trace (not just the first line), from the first error onwards. Set `logging.level.com.persimmon.ddd=DEBUG` if the default log says nothing. Redact secrets and tenant data.
+      render: text
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: The `persimmon.ddd.*` block of your `application.yaml` (and `spring.datasource`, `spring.kafka` if relevant), plus any framework bean you override (`@Bean` replacing a `persimmon*` one).
+      render: yaml
+
+  - type: textarea
+    id: data
+    attributes:
+      label: Database state (outbox, inbox, idempotency, tenancy bugs)
+      description: For a delivery or dedup problem, the rows in question. `SELECT event_id, source, type, version, subject, destination, tenant_id, sent, attempts, next_attempt_at, lease_until, created_at FROM persimmon_outbox ...`, the `persimmon_dead_letter` row with `last_error`, the `persimmon_inbox` rows for the event id. Payload redacted is fine.
+      render: text
+
+  - type: textarea
+    id: regression
+    attributes:
+      label: Regression?
+      description: Did this work on an earlier version? Which one? If you bisected, the commit or snapshot timestamp where it broke.
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround
+      description: What you did to get past it, if anything. Helps others until the fix ships.
+
+  - type: textarea
+    id: analysis
+    attributes:
+      label: Your analysis (optional)
+      description: If you looked at the framework code, where you think it goes wrong (class and line), and why. A guess labelled as a guess is welcome.
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I can open a pull request with a failing test.
+        - label: I can open a pull request with a fix.

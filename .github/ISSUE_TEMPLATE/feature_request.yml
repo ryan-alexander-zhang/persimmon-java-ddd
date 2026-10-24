@@ -1,0 +1,127 @@
+name: Feature request
+description: A capability persimmon-ddd lacks, or a change to how one works.
+title: "[module]: the capability in one line"
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A good request describes a problem a real system hit, not only a solution. The framework stays small on purpose
+        (one way to do a thing, no speculative flexibility), so the problem statement decides more than the design.
+
+  - type: checkboxes
+    id: before
+    attributes:
+      label: Before you file
+      options:
+        - label: I searched the open and closed issues and the discussions; this is not a duplicate.
+          required: true
+        - label: I read GUIDE.md and confirmed the framework does not already cover this (or it does, badly, and I say how below).
+          required: true
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      multiple: true
+      options:
+        - persimmon-ddd-core
+        - persimmon-ddd-application
+        - persimmon-ddd-spring-boot-starter
+        - persimmon-ddd-web
+        - persimmon-ddd-persistence-mybatis-plus
+        - persimmon-ddd-outbox
+        - persimmon-ddd-kafka
+        - persimmon-ddd-flyway
+        - persimmon-ddd-openapi
+        - persimmon-ddd-tenancy
+        - persimmon-ddd-idempotency
+        - persimmon-ddd-archunit
+        - scaffold / persimmon new
+        - a new module
+        - documentation
+        - not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: |
+        What you are trying to do, in which bounded context, and what stops you today. Concrete: the aggregate, the flow, the number of events per second, the failure you saw. "It would be nice if" is not a problem.
+      placeholder: Billing must stop issuing invoices for a customer the moment ordering marks them delinquent, within a second, across 40 instances. Integration events through the outbox take up to poll-delay + relay time, and a listener per instance ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: How you work around it today
+      description: The code or process you have instead, and what is wrong with it (duplicated in every context, breaks a rule ArchUnit enforces, leaks infrastructure into the domain, costs an extra table ...).
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: |
+        What the framework would offer. Show the call site first, the way a user would write it; the implementation second, if you have one in mind.
+        Name the public types and properties it adds or changes (`CommandScheduler.cancel(id)`, `persimmon.ddd.outbox.routes`, a new ArchUnit rule in `all()`).
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other designs, and why they lose. Including "do nothing, document the workaround" and "a library that already does this" (name it).
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: fit
+    attributes:
+      label: Fit with the framework's rules
+      description: Tick what the proposal keeps true. An untickable box is not a veto, but say why in the proposal.
+      options:
+        - label: A bounded context still depends on another only through that context's `-api` module.
+        - label: A context can still become a service of its own with configuration changes only (no code change).
+        - label: The domain layer stays free of Spring, MyBatis, Jackson and ambient time.
+        - label: Delivery stays at least once, in order per subject, deduplicated per context by the inbox.
+        - label: It adds no new runtime dependency to a module that users must carry (or names the dependency and why it is worth it).
+        - label: It is one way to do the thing, not a second way to do something the framework already does.
+
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: Compatibility
+      options:
+        - Additive, nothing existing changes
+        - Changes a default (behaviour differs for users who set nothing)
+        - Changes a public type, property name or table (a migration or code change for users)
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and non-goals
+      description: What is explicitly out of this request, so a reviewer does not design the whole feature family. Rough size if you can judge it (lines, modules touched, new table yes/no).
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: How we would know it works
+      description: The test or scenario that passes when this is done, written against the scaffold where possible ("place an order, stop the instance, start another, the deadline still fires").
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I can write the design note (a `## Changes` section or a GUIDE.md paragraph).
+        - label: I can open a pull request with the implementation and tests.
