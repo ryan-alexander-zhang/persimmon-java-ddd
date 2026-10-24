@@ -1,7 +1,8 @@
 # persimmon-java-ddd
 
 Lean tactical DDD building blocks for Java 21, rewritten from `aipersimmon-ddd` one component at a
-time. Group id `com.persimmon.ddd`.
+time. Group id `com.persimmon.ddd`. **[GUIDE.md](GUIDE.md)** is how to build on it; the sections
+below record what changed from the old framework.
 
 | Module | What it gives you | Depends on |
 |---|---|---|
@@ -9,8 +10,8 @@ time. Group id `com.persimmon.ddd`.
 | `persimmon-ddd-application` | `Command`/`Query` + handlers and buses (`SimpleCommandBus`, `SimpleQueryBus`), `CommandContext`, `CommandInterceptor`, `UnitOfWork`, `DomainEvents`, `Slice`/`Page`/`Cursor`, application exceptions | core |
 | `persimmon-ddd-web` | Spring Boot auto-configuration: RFC 9457 problem details for every `DomainException`, `ProblemCatalog` overrides per code, `X-Request-Id` filter, `Cursor` as a JSON string | application, Spring MVC |
 | `persimmon-ddd-persistence-mybatis-plus` | `MybatisPlusAggregateRepository`: whole-row save with optimistic locking, events published after save; assembles `MybatisPlusInterceptor` from `InnerInterceptor` beans | application, MyBatis-Plus |
-| `persimmon-ddd-spring-boot-starter` | Auto-configures `CommandBus`/`QueryBus` from handler beans, logging + validation + transaction interceptors, `UnitOfWork`, Spring-event `DomainEvents`, UUIDv7 `IdGenerator` | application, Spring Boot |
-| `persimmon-ddd-outbox` | Transactional outbox: `IntegrationEvents` writes a row with the command, a leased relay delivers it in process (or to a broker module), retries with backoff, dead-letters, replays, inbox dedup, optional cleanup; the row carries tenant and trace context, so the dispatch is a child span of the writing request when Micrometer Tracing is wired | spring-boot-starter, MyBatis-Plus starter, Flyway migrations under `persimmon/db/migration/outbox/` |
+| `persimmon-ddd-spring-boot-starter` | Auto-configures `CommandBus`/`QueryBus` from handler beans, logging + validation + conflict-retry + transaction interceptors, `UnitOfWork`, Spring-event `DomainEvents`, UUIDv7 `IdGenerator` | application, Spring Boot |
+| `persimmon-ddd-outbox` | Transactional outbox: `IntegrationEvents` writes a row with the command, a leased relay delivers it in process per bounded context (or to a broker module), retries with backoff, dead-letters, replays, inbox dedup, cleanup; `CommandScheduler` for commands due later; Micrometer metrics and `/actuator/outbox` for dead letters; the row carries tenant and trace context, so the dispatch is a child span of the writing request | spring-boot-starter, MyBatis-Plus starter, Flyway migrations under `persimmon/db/migration/outbox/` |
 | `persimmon-ddd-flyway` | Applies every module's `persimmon/db/migration/<component>/<vendor>` through Flyway after the application's own migrations, one history table per component | Flyway |
 | `persimmon-ddd-openapi` | springdoc with the `ProblemDetail` schema and the default problem responses attached to every operation | web, springdoc |
 | `persimmon-ddd-tenancy` | Off until `persimmon.ddd.tenancy.enabled=true`: tenant per request into `TenantContext`, listed tables scoped by `tenant_id` in SQL, a guard for tables nobody decided about | persistence-mybatis-plus, Spring MVC |
