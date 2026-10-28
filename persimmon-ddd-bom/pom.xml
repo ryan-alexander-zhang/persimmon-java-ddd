@@ -82,6 +82,11 @@
       </dependency>
       <dependency>
         <groupId>com.persimmon.ddd</groupId>
+        <artifactId>persimmon-ddd-rabbit</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.persimmon.ddd</groupId>
         <artifactId>persimmon-ddd-archunit</artifactId>
         <version>${project.version}</version>
       </dependency>

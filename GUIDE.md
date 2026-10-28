@@ -199,6 +199,18 @@ CloudEvents-style records keyed by subject, the consumer side lists
 `persimmon.ddd.kafka.consumer.topics` and hands records to the same dispatcher, same listeners,
 same inbox. Permanent failures (unknown type, unreadable payload) go to `<topic>.DLT`.
 
+With RabbitMQ instead, add `persimmon-ddd-rabbit`: the destination is a topic exchange, the
+routing key is the event type, and the consumer side binds its queue by pattern:
+
+```yaml
+persimmon.ddd.rabbit.consumer:
+  enabled: true
+  bindings:
+    ordering.events: "ordering.*"      # exchange -> routing-key pattern; the queue is the app name
+```
+
+Rejected messages land in `<queue>.dlq`.
+
 **Evolving an event.** Bump `version` and add an `EventUpcaster<OldEvent, NewEvent>` bean on the
 consumer; old rows and old records are moved forward before delivery.
 
@@ -258,6 +270,7 @@ Properties, with defaults:
 | `persimmon.ddd.outbox.relay-enabled` | true | false in tests that call `OutboxRelay.relay()` themselves |
 | `persimmon.ddd.command.conflict-retries` | 3 | optimistic-lock retries |
 | `persimmon.ddd.kafka.consumer.enabled` / `topics` / `group-id` | false / [] / app name | the inbound bridge |
+| `persimmon.ddd.rabbit.consumer.enabled` / `bindings` / `queue` | false / {} / app name | the inbound bridge, exchange → pattern |
 | `persimmon.ddd.idempotency.ttl` / `lease` / `max-body-size` | 24h / 1m / 1MB | |
 | `persimmon.ddd.tenancy.*` | off | section 9 |
 | `persimmon.ddd.flyway.enabled` | true | |

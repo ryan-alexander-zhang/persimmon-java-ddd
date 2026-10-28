@@ -35,6 +35,7 @@ body:
         - persimmon-ddd-persistence-mybatis-plus
         - persimmon-ddd-outbox
         - persimmon-ddd-kafka
+        - persimmon-ddd-rabbit
         - persimmon-ddd-flyway
         - persimmon-ddd-openapi
         - persimmon-ddd-tenancy
@@ -61,13 +62,13 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: Fill in what applies. `java -version`, `mvn -version`, the Boot version your pom inherits, the database and its version, the broker if the outbox/kafka modules are involved.
+      description: Fill in what applies. `java -version`, `mvn -version`, the Boot version your pom inherits, the database and its version, the broker if the outbox/kafka/rabbit modules are involved.
       value: |
         - Java: 
         - Maven: 
         - Spring Boot: 
         - Database (vendor + version, or H2): 
-        - Kafka (version, or none): 
+        - Kafka / RabbitMQ (version, or none): 
         - OS: 
         - Running as (tests / `spring-boot:run` / jar in container): 
     validations:

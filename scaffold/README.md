@@ -28,7 +28,8 @@ Rules a second context lives by, all checked by `ArchitectureTest`:
   process, one transaction and one inbox record per listening context, so a failing listener in
   one context never rolls back or re-runs another's; the day a context becomes a service, add `persimmon-ddd-kafka` to both deployables,
   route its events with `persimmon.ddd.outbox.routes`, and list the topics the other side consumes
-  under `persimmon.ddd.kafka.consumer.topics`. That context gets a `start` of its own. No code
+  under `persimmon.ddd.kafka.consumer.topics` (or `persimmon-ddd-rabbit` and
+  `persimmon.ddd.rabbit.consumer.bindings`). That context gets a `start` of its own. No code
   changes.
 
 A saga is event handlers plus a deadline. `OrderPlacedHandler` schedules

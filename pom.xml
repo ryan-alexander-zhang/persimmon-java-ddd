@@ -51,6 +51,7 @@
     <module>persimmon-ddd-tenancy</module>
     <module>persimmon-ddd-idempotency</module>
     <module>persimmon-ddd-kafka</module>
+    <module>persimmon-ddd-rabbit</module>
     <module>persimmon-ddd-bom</module>
   </modules>
 
