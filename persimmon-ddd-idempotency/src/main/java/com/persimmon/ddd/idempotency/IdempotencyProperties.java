@@ -18,4 +18,6 @@ public record IdempotencyProperties(
     /* Reject unsafe requests that carry no key. */
     @DefaultValue("false") boolean requireKey,
     @DefaultValue({"POST", "PUT", "PATCH", "DELETE"}) List<String> methods,
-    @DefaultValue("1MB") DataSize maxBodySize) {}
+    @DefaultValue("1MB") DataSize maxBodySize,
+    /* Response headers replayed besides Content-Type, Location, ETag and Content-Language. */
+    @DefaultValue List<String> replayedHeaders) {}

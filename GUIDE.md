@@ -273,6 +273,7 @@ Properties, with defaults:
 | `persimmon.ddd.kafka.consumer.enabled` / `topics` / `group-id` | false / [] / app name | the inbound bridge |
 | `persimmon.ddd.rabbit.consumer.enabled` / `bindings` / `queue` | false / {} / app name | the inbound bridge, exchange → pattern |
 | `persimmon.ddd.idempotency.ttl` / `lease` / `max-body-size` | 24h / 1m / 1MB | |
+| `persimmon.ddd.idempotency.replayed-headers` | [] | response headers a replay carries besides `Content-Type`, `Location`, `ETag`, `Content-Language` |
 | `persimmon.ddd.tenancy.*` | off | section 9 |
 | `persimmon.ddd.flyway.enabled` | true | |
 

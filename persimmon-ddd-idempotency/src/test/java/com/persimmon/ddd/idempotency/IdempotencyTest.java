@@ -50,7 +50,10 @@ class IdempotencyTest {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).header("Retry-After", "15").body(Map.of("attempt", n));
       }
       if ("unknown".equals(body.get("amount"))) {
-        return ResponseEntity.status(HttpStatus.GATEWAY_TIMEOUT).body(Map.of("type", "result-unknown", "attempt", n));
+        return ResponseEntity.status(HttpStatus.GATEWAY_TIMEOUT)
+            .header("X-Source", "upstream")
+            .header("X-Unlisted", "dropped")
+            .body(Map.of("type", "result-unknown", "attempt", n));
       }
       return ResponseEntity.created(URI.create("/payments/" + n)).body(Map.of("id", n, "amount", body.get("amount")));
     }
@@ -128,7 +131,11 @@ class IdempotencyTest {
   @Test
   void aResponseRetentionBeanCanKeepA5xx() throws Exception {
     mvc.perform(pay("k-504", "{\"amount\":\"unknown\"}")).andExpect(status().isGatewayTimeout()).andExpect(jsonPath("$.attempt").value(1));
-    mvc.perform(pay("k-504", "{\"amount\":\"unknown\"}")).andExpect(status().isGatewayTimeout()).andExpect(jsonPath("$.attempt").value(1));
+    mvc.perform(pay("k-504", "{\"amount\":\"unknown\"}"))
+        .andExpect(status().isGatewayTimeout())
+        .andExpect(jsonPath("$.attempt").value(1))
+        .andExpect(header().string("X-Source", "upstream"))
+        .andExpect(header().doesNotExist("X-Unlisted"));
     assertEquals(1, app.payments.get());
   }
 

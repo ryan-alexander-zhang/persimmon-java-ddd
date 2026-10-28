@@ -49,6 +49,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
   private final ObjectMapper json;
   private final ResponseRetention retention;
   private final Set<String> methods;
+  private final Set<String> replayedHeaders;
 
   public IdempotencyFilter(IdempotencyStore store, IdempotencyProperties properties, ObjectMapper json, ResponseRetention retention) {
     this.store = store;
@@ -56,6 +57,8 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     this.json = json;
     this.retention = retention;
     this.methods = properties.methods().stream().map(m -> m.toUpperCase(Locale.ROOT)).collect(java.util.stream.Collectors.toSet());
+    this.replayedHeaders = new java.util.HashSet<>(REPLAYED_HEADERS);
+    properties.replayedHeaders().forEach(h -> replayedHeaders.add(h.toLowerCase(Locale.ROOT)));
   }
 
   @Override
@@ -104,7 +107,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
       chain.doFilter(request, wrapper);
       Map<String, String> headers = new LinkedHashMap<>();
       for (String name : wrapper.getHeaderNames()) {
-        if (REPLAYED_HEADERS.contains(name.toLowerCase(Locale.ROOT)) && wrapper.getHeader(name) != null) {
+        if (replayedHeaders.contains(name.toLowerCase(Locale.ROOT)) && wrapper.getHeader(name) != null) {
           headers.put(name, wrapper.getHeader(name));
         }
       }
