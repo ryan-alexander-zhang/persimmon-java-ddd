@@ -21,6 +21,8 @@ import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -44,7 +46,19 @@ class IdempotencyTest {
         throw new IllegalStateException("gateway down");
       }
       int n = payments.incrementAndGet();
+      if ("busy".equals(body.get("amount"))) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).header("Retry-After", "15").body(Map.of("attempt", n));
+      }
+      if ("unknown".equals(body.get("amount"))) {
+        return ResponseEntity.status(HttpStatus.GATEWAY_TIMEOUT).body(Map.of("type", "result-unknown", "attempt", n));
+      }
       return ResponseEntity.created(URI.create("/payments/" + n)).body(Map.of("id", n, "amount", body.get("amount")));
+    }
+
+    @Bean
+    ResponseRetention retention() {
+      return response -> ResponseRetention.DEFAULT.retain(response)
+          || response.status() == 504 && new String(response.body(), StandardCharsets.UTF_8).contains("result-unknown");
     }
   }
 
@@ -101,6 +115,19 @@ class IdempotencyTest {
     mvc.perform(pay("k-fail", "{\"amount\":\"boom\"}")).andExpect(status().isInternalServerError());
     mvc.perform(pay("k-fail", "{\"amount\":\"boom\"}")).andExpect(status().isInternalServerError());
     assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM persimmon_idempotency WHERE idempotency_key = 'k-fail'", Integer.class), "a failure leaves no claim behind");
+  }
+
+  @Test
+  void aTooManyRequestsRefusalIsNotStoredSoTheSameKeyRunsAgain() throws Exception {
+    mvc.perform(pay("k-429", "{\"amount\":\"busy\"}")).andExpect(status().isTooManyRequests()).andExpect(jsonPath("$.attempt").value(1));
+    mvc.perform(pay("k-429", "{\"amount\":\"busy\"}")).andExpect(status().isTooManyRequests()).andExpect(jsonPath("$.attempt").value(2));
+  }
+
+  @Test
+  void aResponseRetentionBeanCanKeepA5xx() throws Exception {
+    mvc.perform(pay("k-504", "{\"amount\":\"unknown\"}")).andExpect(status().isGatewayTimeout()).andExpect(jsonPath("$.attempt").value(1));
+    mvc.perform(pay("k-504", "{\"amount\":\"unknown\"}")).andExpect(status().isGatewayTimeout()).andExpect(jsonPath("$.attempt").value(1));
+    assertEquals(1, app.payments.get());
   }
 
   @Test

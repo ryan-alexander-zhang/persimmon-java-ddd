@@ -37,8 +37,8 @@ import org.springframework.web.util.ContentCachingResponseWrapper;
 /**
  * A request with an {@code Idempotency-Key} runs once per (tenant, principal, key). A retry with
  * the same body gets the stored response; a different body under the same key is 422; a retry
- * while the first is still running is 409. Responses of 5xx are not stored, so the client may
- * retry them.
+ * while the first is still running is 409. Responses of 429 and 5xx are not stored, so the client
+ * may retry them; a {@link ResponseRetention} bean changes which are.
  */
 public class IdempotencyFilter extends OncePerRequestFilter {
   private static final Set<String> REPLAYED_HEADERS =
@@ -47,12 +47,14 @@ public class IdempotencyFilter extends OncePerRequestFilter {
   private final IdempotencyStore store;
   private final IdempotencyProperties properties;
   private final ObjectMapper json;
+  private final ResponseRetention retention;
   private final Set<String> methods;
 
-  public IdempotencyFilter(IdempotencyStore store, IdempotencyProperties properties, ObjectMapper json) {
+  public IdempotencyFilter(IdempotencyStore store, IdempotencyProperties properties, ObjectMapper json, ResponseRetention retention) {
     this.store = store;
     this.properties = properties;
     this.json = json;
+    this.retention = retention;
     this.methods = properties.methods().stream().map(m -> m.toUpperCase(Locale.ROOT)).collect(java.util.stream.Collectors.toSet());
   }
 
@@ -100,17 +102,18 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     boolean completed = false;
     try {
       chain.doFilter(request, wrapper);
-      if (wrapper.getStatus() < 500) {
-        Map<String, String> headers = new LinkedHashMap<>();
-        for (String name : wrapper.getHeaderNames()) {
-          if (REPLAYED_HEADERS.contains(name.toLowerCase(Locale.ROOT)) && wrapper.getHeader(name) != null) {
-            headers.put(name, wrapper.getHeader(name));
-          }
+      Map<String, String> headers = new LinkedHashMap<>();
+      for (String name : wrapper.getHeaderNames()) {
+        if (REPLAYED_HEADERS.contains(name.toLowerCase(Locale.ROOT)) && wrapper.getHeader(name) != null) {
+          headers.put(name, wrapper.getHeader(name));
         }
-        if (wrapper.getContentType() != null) {
-          headers.put(HttpHeaders.CONTENT_TYPE, wrapper.getContentType());
-        }
-        store.complete(key, new StoredResponse(wrapper.getStatus(), wrapper.getContentAsByteArray(), headers), properties.ttl());
+      }
+      if (wrapper.getContentType() != null) {
+        headers.put(HttpHeaders.CONTENT_TYPE, wrapper.getContentType());
+      }
+      StoredResponse stored = new StoredResponse(wrapper.getStatus(), wrapper.getContentAsByteArray(), headers);
+      if (retention.retain(stored)) {
+        store.complete(key, stored, properties.ttl());
         completed = true;
       }
     } finally {
