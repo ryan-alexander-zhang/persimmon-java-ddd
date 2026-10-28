@@ -156,8 +156,9 @@ ResponseEntity<Void> confirm(@PathVariable String id) {
   `ProblemCatalog` bean. Spring MVC's own errors keep their standard shape.
 - `X-Request-Id` is read or generated and echoed; it is on the MDC for the request.
 - `persimmon-ddd-idempotency`: a client sends `Idempotency-Key` on an unsafe request; the first
-  call runs, a retry with the same body replays the stored response, a different body is 422,
-  a concurrent duplicate is 409. Keys expire after `persimmon.ddd.idempotency.ttl` (24h). A 429 or
+  call runs, a retry with the same body replays the stored response with
+  `Idempotent-Replayed: true` (its own `X-Request-Id`; a problem body keeps the first call's
+  `requestId`), a different body is 422, a concurrent duplicate is 409. Keys expire after `persimmon.ddd.idempotency.ttl` (24h). A 429 or
   5xx is not stored, so a retry with the same key runs again; a `ResponseRetention` bean decides
   otherwise (e.g. keep a 504 that says the outcome is unknown).
 - `persimmon-ddd-openapi`: springdoc with the problem schema and default error responses on every

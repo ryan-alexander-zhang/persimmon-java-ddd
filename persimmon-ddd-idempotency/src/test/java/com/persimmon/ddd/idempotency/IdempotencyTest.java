@@ -83,10 +83,12 @@ class IdempotencyTest {
     mvc.perform(pay("k-1", "{\"amount\":10}"))
         .andExpect(status().isCreated())
         .andExpect(header().string("Location", "/payments/1"))
+        .andExpect(header().doesNotExist("Idempotent-Replayed"))
         .andExpect(jsonPath("$.id").value(1));
     mvc.perform(pay("k-1", "{\"amount\":10}"))
         .andExpect(status().isCreated())
         .andExpect(header().string("Location", "/payments/1"))
+        .andExpect(header().string("Idempotent-Replayed", "true"))
         .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
         .andExpect(jsonPath("$.id").value(1));
     assertEquals(1, app.payments.get());

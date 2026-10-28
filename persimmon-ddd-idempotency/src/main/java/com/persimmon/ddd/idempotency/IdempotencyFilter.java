@@ -128,9 +128,11 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     }
   }
 
+  /** The stored status, headers and body, marked as a replay; this request keeps its own request id. */
   private static void replay(HttpServletResponse response, StoredResponse stored) throws IOException {
     response.setStatus(stored.status());
     stored.headers().forEach(response::setHeader);
+    response.setHeader("Idempotent-Replayed", "true");
     response.getOutputStream().write(stored.body());
   }
 
