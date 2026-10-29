@@ -48,7 +48,10 @@ import org.springframework.util.ClassUtils;
 @AutoConfiguration(
     afterName = {
       "com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration",
-      "org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration"
+      "org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration",
+      // the MeterRegistry the Metrics config waits for
+      "org.springframework.boot.actuate.autoconfigure.metrics.MetricsAutoConfiguration",
+      "org.springframework.boot.actuate.autoconfigure.metrics.CompositeMeterRegistryAutoConfiguration"
     })
 @ConditionalOnBean(SqlSessionFactory.class)
 @EnableConfigurationProperties(OutboxProperties.class)
