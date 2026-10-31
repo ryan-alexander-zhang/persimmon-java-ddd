@@ -21,6 +21,7 @@ import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import com.persimmon.ddd.web.ProblemCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -56,6 +57,14 @@ class IdempotencyTest {
             .body(Map.of("type", "result-unknown", "attempt", n));
       }
       return ResponseEntity.created(URI.create("/payments/" + n)).body(Map.of("id", n, "amount", body.get("amount")));
+    }
+
+    @Bean
+    ProblemCustomizer source() {
+      return (problem, headers) -> {
+        problem.setProperty("sent", false);
+        headers.set("X-Source", "gateway");
+      };
     }
 
     @Bean
@@ -104,7 +113,11 @@ class IdempotencyTest {
     mvc.perform(pay("k-1", "{\"amount\":99}"))
         .andExpect(status().isUnprocessableEntity())
         .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-        .andExpect(jsonPath("$.type").value("/problems/idempotency-key-reused"));
+        .andExpect(jsonPath("$.type").value("/problems/idempotency-key-reused"))
+        .andExpect(jsonPath("$.code").value("idempotency.key-reused"))
+        .andExpect(jsonPath("$.requestId").exists())
+        .andExpect(jsonPath("$.sent").value(false))
+        .andExpect(header().string("X-Source", "gateway"));
     assertEquals(1, app.payments.get());
   }
 
@@ -115,7 +128,9 @@ class IdempotencyTest {
     store.claim(new IdempotencyStore.Key("__root__", "", "k-busy"), HexFormat.of().formatHex(digest.digest()), Duration.ofMinutes(1));
     mvc.perform(pay("k-busy", "{\"amount\":10}"))
         .andExpect(status().isConflict())
-        .andExpect(header().string("Retry-After", "1"));
+        .andExpect(header().string("Retry-After", "1"))
+        .andExpect(header().string("X-Source", "gateway"))
+        .andExpect(jsonPath("$.code").value("idempotency.in-progress"));
 
     mvc.perform(pay("k-fail", "{\"amount\":\"boom\"}")).andExpect(status().isInternalServerError());
     mvc.perform(pay("k-fail", "{\"amount\":\"boom\"}")).andExpect(status().isInternalServerError());

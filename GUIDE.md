@@ -153,7 +153,10 @@ ResponseEntity<Void> confirm(@PathVariable String id) {
 
 - Every `DomainException` becomes an RFC 9457 problem detail with `code`, `title`, `status`,
   `detail`, `instance`, and `errors[]` for validation. Override title or status per code with a
-  `ProblemCatalog` bean. Spring MVC's own errors keep their standard shape.
+  `ProblemCatalog` bean. Spring MVC's own errors keep their standard shape. A `ProblemCustomizer`
+  bean adds properties or response headers to every problem detail, the ones Spring MVC writes and
+  the ones persimmon filters write before MVC (idempotency answers carry `code`
+  `idempotency.key-required`, `.key-too-long`, `.request-too-large`, `.in-progress`, `.key-reused`).
 - `X-Request-Id` is read or generated and echoed; it is on the MDC for the request.
 - `persimmon-ddd-idempotency`: a client sends `Idempotency-Key` on an unsafe request; the first
   call runs, a retry with the same body replays the stored response with

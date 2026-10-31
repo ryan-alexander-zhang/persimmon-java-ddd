@@ -1,6 +1,7 @@
 package com.persimmon.ddd.idempotency;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.persimmon.ddd.web.ProblemCustomizer;
 import java.time.Clock;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.mapper.MapperFactoryBean;
@@ -42,9 +43,11 @@ public class IdempotencyAutoConfiguration {
   @Bean
   @ConditionalOnMissingBean(name = "persimmonIdempotencyFilter")
   public FilterRegistrationBean<IdempotencyFilter> persimmonIdempotencyFilter(
-      IdempotencyStore store, IdempotencyProperties properties, ObjectProvider<ObjectMapper> json, ObjectProvider<ResponseRetention> retention) {
+      IdempotencyStore store, IdempotencyProperties properties, ObjectProvider<ObjectMapper> json, ObjectProvider<ResponseRetention> retention,
+      ObjectProvider<ProblemCustomizer> customizers) {
     FilterRegistrationBean<IdempotencyFilter> registration = new FilterRegistrationBean<>(new IdempotencyFilter(
-        store, properties, json.getIfAvailable(ObjectMapper::new), retention.getIfAvailable(() -> ResponseRetention.DEFAULT)));
+        store, properties, json.getIfAvailable(ObjectMapper::new), retention.getIfAvailable(() -> ResponseRetention.DEFAULT),
+        customizers.orderedStream().toList()));
     registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 40);
     return registration;
   }

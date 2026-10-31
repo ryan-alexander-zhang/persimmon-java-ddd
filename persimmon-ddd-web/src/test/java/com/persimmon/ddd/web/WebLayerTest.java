@@ -71,6 +71,14 @@ class WebLayerTest {
               new ProblemDescriptor("/problems/insufficient-credit", 402, "Insufficient credit"));
     }
 
+    @Bean
+    ProblemCustomizer source() {
+      return (problem, headers) -> {
+        problem.setProperty("source", "app");
+        headers.set("X-Source", "app");
+      };
+    }
+
     @PostMapping("/t/coded")
     void coded() {
       throw new DomainException(Code.CREDIT_EXCEEDED, "over limit");
@@ -187,6 +195,18 @@ class WebLayerTest {
     mvc.perform(post("/t/family").header("X-Request-Id", "req-42"))
         .andExpect(header().string("X-Request-Id", "req-42"))
         .andExpect(jsonPath("$.requestId").value("req-42"));
+  }
+
+  @Test
+  void aProblemCustomizerShapesEveryProblemSpringMvcWrites() throws Exception {
+    mvc.perform(post("/t/coded"))
+        .andExpect(header().string("X-Source", "app"))
+        .andExpect(jsonPath("$.source").value("app"))
+        .andExpect(jsonPath("$.code").value("ordering.credit-exceeded"));
+    mvc.perform(get("/t/nowhere")).andExpect(header().string("X-Source", "app")).andExpect(jsonPath("$.source").value("app"));
+    mvc.perform(get("/t/boom")).andExpect(header().string("X-Source", "app")).andExpect(jsonPath("$.source").value("app"));
+    mvc.perform(get("/t/violation")).andExpect(header().string("X-Source", "app")).andExpect(jsonPath("$.source").value("app"));
+    mvc.perform(get("/t/slice")).andExpect(header().doesNotExist("X-Source"));
   }
 
   @Test

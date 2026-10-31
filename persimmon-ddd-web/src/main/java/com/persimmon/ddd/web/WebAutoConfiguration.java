@@ -32,6 +32,12 @@ public class WebAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
+  public ProblemCustomizerAdvice persimmonProblemCustomizerAdvice(ObjectProvider<ProblemCustomizer> customizers) {
+    return new ProblemCustomizerAdvice(customizers.orderedStream().toList());
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
   public CursorJacksonModule persimmonCursorJacksonModule() {
     return new CursorJacksonModule();
   }

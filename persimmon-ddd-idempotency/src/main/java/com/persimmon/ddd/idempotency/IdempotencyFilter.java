@@ -5,6 +5,7 @@ import com.persimmon.ddd.application.TenantContext;
 import com.persimmon.ddd.idempotency.IdempotencyStore.Claim;
 import com.persimmon.ddd.idempotency.IdempotencyStore.Key;
 import com.persimmon.ddd.idempotency.IdempotencyStore.StoredResponse;
+import com.persimmon.ddd.web.ProblemCustomizer;
 import com.persimmon.ddd.web.Problems;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
@@ -48,14 +49,17 @@ public class IdempotencyFilter extends OncePerRequestFilter {
   private final IdempotencyProperties properties;
   private final ObjectMapper json;
   private final ResponseRetention retention;
+  private final List<ProblemCustomizer> customizers;
   private final Set<String> methods;
   private final Set<String> replayedHeaders;
 
-  public IdempotencyFilter(IdempotencyStore store, IdempotencyProperties properties, ObjectMapper json, ResponseRetention retention) {
+  public IdempotencyFilter(IdempotencyStore store, IdempotencyProperties properties, ObjectMapper json, ResponseRetention retention,
+      List<ProblemCustomizer> customizers) {
     this.store = store;
     this.properties = properties;
     this.json = json;
     this.retention = retention;
+    this.customizers = customizers;
     this.methods = properties.methods().stream().map(m -> m.toUpperCase(Locale.ROOT)).collect(java.util.stream.Collectors.toSet());
     this.replayedHeaders = new java.util.HashSet<>(REPLAYED_HEADERS);
     properties.replayedHeaders().forEach(h -> replayedHeaders.add(h.toLowerCase(Locale.ROOT)));
@@ -70,18 +74,18 @@ public class IdempotencyFilter extends OncePerRequestFilter {
       return;
     }
     if (rawKey == null || rawKey.isBlank()) {
-      problem(response, HttpStatus.BAD_REQUEST, "/problems/idempotency-key-required", properties.header() + " header is required");
+      problem(response, HttpStatus.BAD_REQUEST, "/problems/idempotency-key-required", "idempotency.key-required", properties.header() + " header is required");
       return;
     }
     if (rawKey.length() > 255) {
-      problem(response, HttpStatus.BAD_REQUEST, "/problems/idempotency-key-too-long", properties.header() + " must be at most 255 characters");
+      problem(response, HttpStatus.BAD_REQUEST, "/problems/idempotency-key-too-long", "idempotency.key-too-long", properties.header() + " must be at most 255 characters");
       return;
     }
     BufferedRequest buffered;
     try {
       buffered = new BufferedRequest(request, (int) properties.maxBodySize().toBytes());
     } catch (BodyTooLarge tooLarge) {
-      problem(response, HttpStatus.PAYLOAD_TOO_LARGE, "/problems/request-too-large", "request body exceeds " + properties.maxBodySize());
+      problem(response, HttpStatus.PAYLOAD_TOO_LARGE, "/problems/request-too-large", "idempotency.request-too-large", "request body exceeds " + properties.maxBodySize());
       return;
     }
     String principal = request.getUserPrincipal() == null ? "" : request.getUserPrincipal().getName();
@@ -92,10 +96,10 @@ public class IdempotencyFilter extends OncePerRequestFilter {
       case Claim.Replay replay -> replay(response, replay.response());
       case Claim.InProgress inProgress -> {
         response.setHeader(HttpHeaders.RETRY_AFTER, "1");
-        problem(response, HttpStatus.CONFLICT, "/problems/idempotency-in-progress", "a request with this " + properties.header() + " is still being processed");
+        problem(response, HttpStatus.CONFLICT, "/problems/idempotency-in-progress", "idempotency.in-progress", "a request with this " + properties.header() + " is still being processed");
       }
       case Claim.Mismatch mismatch ->
-          problem(response, HttpStatus.UNPROCESSABLE_ENTITY, "/problems/idempotency-key-reused", "this " + properties.header() + " was used for a different request");
+          problem(response, HttpStatus.UNPROCESSABLE_ENTITY, "/problems/idempotency-key-reused", "idempotency.key-reused", "this " + properties.header() + " was used for a different request");
     }
   }
 
@@ -139,9 +143,14 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     response.getOutputStream().write(stored.body());
   }
 
-  private void problem(HttpServletResponse response, HttpStatus status, String type, String detail) throws IOException {
+  /** Written here, before MVC, so the {@link ProblemCustomizer}s are run here too. */
+  private void problem(HttpServletResponse response, HttpStatus status, String type, String code, String detail) throws IOException {
     ProblemDetail body = Problems.stamp(ProblemDetail.forStatusAndDetail(status, detail));
     body.setType(URI.create(type));
+    body.setProperty("code", code);
+    HttpHeaders headers = new HttpHeaders();
+    customizers.forEach(c -> c.customize(body, headers));
+    headers.forEach((name, values) -> values.forEach(value -> response.addHeader(name, value)));
     response.setStatus(status.value());
     response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
     json.writeValue(response.getOutputStream(), body);
