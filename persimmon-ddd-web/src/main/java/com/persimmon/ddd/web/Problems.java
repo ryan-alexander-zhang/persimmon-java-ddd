@@ -12,7 +12,10 @@ import org.springframework.http.ProblemDetail;
 
 /** Builds problem details. A code's catalog override wins, else its category's default. */
 public final class Problems {
-  /** MDC key observability fills; copied into the body as {@code traceId} when present. */
+  /** MDC key Micrometer Tracing fills; copied into the body as {@code traceId} when present. */
+  public static final String MICROMETER_TRACE_ID_MDC_KEY = "traceId";
+
+  /** MDC key the OpenTelemetry Java agent fills; read when Micrometer's is absent. */
   public static final String TRACE_ID_MDC_KEY = "trace_id";
 
   private final Map<String, ProblemDescriptor> overrides = new HashMap<>();
@@ -51,7 +54,10 @@ public final class Problems {
     if (requestId != null) {
       detail.setProperty("requestId", requestId);
     }
-    String traceId = MDC.get(TRACE_ID_MDC_KEY);
+    String traceId = MDC.get(MICROMETER_TRACE_ID_MDC_KEY);
+    if (traceId == null) {
+      traceId = MDC.get(TRACE_ID_MDC_KEY);
+    }
     if (traceId != null) {
       detail.setProperty("traceId", traceId);
     }
