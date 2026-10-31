@@ -1,6 +1,7 @@
 package com.persimmon.ddd.idempotency;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -155,8 +156,10 @@ class IdempotencyTest {
   }
 
   @Test
-  void expiredRowsArePurged() {
-    store.claim(new IdempotencyStore.Key("__root__", "", "old"), "x", Duration.ofMinutes(-1));
+  void expiredResponsesArePurged() {
+    var key = new IdempotencyStore.Key("__root__", "", "old");
+    var claim = assertInstanceOf(IdempotencyStore.Claim.Won.class, store.claim(key, "x", Duration.ofMinutes(1)));
+    store.complete(key, claim.token(), new IdempotencyStore.StoredResponse(200, new byte[0], Map.of()), Duration.ofMinutes(-1));
     assertEquals(1, store.deleteExpired(100));
     assertEquals(0, store.deleteExpired(100));
   }

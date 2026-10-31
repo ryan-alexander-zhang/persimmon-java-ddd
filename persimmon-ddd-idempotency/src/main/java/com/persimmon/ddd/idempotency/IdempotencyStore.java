@@ -10,22 +10,26 @@ public interface IdempotencyStore {
   record StoredResponse(int status, byte[] body, Map<String, String> headers) {}
 
   sealed interface Claim {
-    record Won() implements Claim {}
+    record Won(String token) implements Claim {}
 
     record InProgress() implements Claim {}
+
+    record OutcomeUnknown() implements Claim {}
 
     record Mismatch() implements Claim {}
 
     record Replay(StoredResponse response) implements Claim {}
   }
 
-  /** Atomically takes the key for {@code lease}, or says what already holds it. */
+  /** Takes an unused key; an expired pending lease has an unknown outcome and cannot be retaken. */
   Claim claim(Key key, String fingerprint, Duration lease);
 
-  void complete(Key key, StoredResponse response, Duration ttl);
+  /** Saves the owning claim's response, even after its lease; throws if ownership was lost. */
+  void complete(Key key, String token, StoredResponse response, Duration ttl);
 
-  /** Drops a pending claim after a failure so the client's retry can run again. */
-  void abandon(Key key);
+  /** Releases only the owning pending claim, when its outcome is known to permit another execution. */
+  void abandon(Key key, String token);
 
+  /** Deletes expired completed responses; pending outcomes are never purged. Returns rows actually deleted. */
   int deleteExpired(int limit);
 }

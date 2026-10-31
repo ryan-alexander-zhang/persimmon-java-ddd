@@ -8,6 +8,7 @@ public class IdempotencyRecord {
   private String tenantId;
   private String principal;
   private String idempotencyKey;
+  private String claimToken;
   private String fingerprint;
   private String state;
   private Integer responseStatus;
@@ -38,6 +39,14 @@ public class IdempotencyRecord {
 
   public void setIdempotencyKey(String idempotencyKey) {
     this.idempotencyKey = idempotencyKey;
+  }
+
+  public String getClaimToken() {
+    return claimToken;
+  }
+
+  public void setClaimToken(String claimToken) {
+    this.claimToken = claimToken;
   }
 
   public String getFingerprint() {

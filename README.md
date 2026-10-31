@@ -158,7 +158,10 @@ it with `mvn test -f scaffold/pom.xml` after `mvn install` here.
 - One module, one store (MyBatis-Plus). No in-memory or Redis store, no startup warning about
   per-instance state. The principal comes from `HttpServletRequest.getUserPrincipal()`; no Spring
   Security dependency or resolver SPI. On by default when on the classpath.
-- Expired rows are purged on a schedule; the old design relied on claim-time deletes only.
+- Only expired `COMPLETE` responses are purged, with expiry and state rechecked when deleting.
+  An expired `PENDING` claim stays blocked as `409 idempotency.result-unknown` until reconciled;
+  lease expiry is not evidence that a side effect never happened. See [the recovery and upgrade
+  rules](GUIDE.md#idempotency-recovery-and-upgrades).
 
 ## Changes from `aipersimmon-ddd-archunit`, `aipersimmon-ddd-test`, `aipersimmon-ddd-test-support`
 

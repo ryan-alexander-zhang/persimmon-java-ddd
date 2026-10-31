@@ -38,7 +38,8 @@ import org.springframework.web.util.ContentCachingResponseWrapper;
 /**
  * A request with an {@code Idempotency-Key} runs once per (tenant, principal, key). A retry with
  * the same body gets the stored response; a different body under the same key is 422; a retry
- * while the first is still running is 409. Responses of 429 and 5xx are not stored, so the client
+ * while the first is still running is 409. An expired pending claim returns 409 result-unknown
+ * until its outcome is reconciled; it never permits automatic re-execution. Responses of 429 and 5xx are not stored, so the client
  * may retry them; a {@link ResponseRetention} bean changes which are.
  */
 public class IdempotencyFilter extends OncePerRequestFilter {
@@ -92,47 +93,44 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     Key key = new Key(TenantContext.effective().value(), principal, rawKey);
     Claim claim = store.claim(key, fingerprint(buffered), properties.lease());
     switch (claim) {
-      case Claim.Won won -> execute(buffered, response, chain, key);
+      case Claim.Won won -> execute(buffered, response, chain, key, won.token());
       case Claim.Replay replay -> replay(response, replay.response());
       case Claim.InProgress inProgress -> {
         response.setHeader(HttpHeaders.RETRY_AFTER, "1");
         problem(response, HttpStatus.CONFLICT, "/problems/idempotency-in-progress", "idempotency.in-progress", "a request with this " + properties.header() + " is still being processed");
       }
+      case Claim.OutcomeUnknown unknown ->
+          problem(response, HttpStatus.CONFLICT, "/problems/idempotency-result-unknown", "idempotency.result-unknown",
+              "the original request's outcome is unknown; reconcile it before attempting another execution");
       case Claim.Mismatch mismatch ->
           problem(response, HttpStatus.UNPROCESSABLE_ENTITY, "/problems/idempotency-key-reused", "idempotency.key-reused", "this " + properties.header() + " was used for a different request");
     }
   }
 
-  private void execute(HttpServletRequest request, HttpServletResponse response, FilterChain chain, Key key)
+  private void execute(HttpServletRequest request, HttpServletResponse response, FilterChain chain, Key key, String token)
       throws ServletException, IOException {
     ContentCachingResponseWrapper wrapper = new ContentCachingResponseWrapper(response);
-    boolean completed = false;
-    try {
-      chain.doFilter(request, wrapper);
-      Map<String, String> headers = new LinkedHashMap<>();
-      for (String name : wrapper.getHeaderNames()) {
-        if (replayedHeaders.contains(name.toLowerCase(Locale.ROOT)) && wrapper.getHeader(name) != null) {
-          headers.put(name, wrapper.getHeader(name));
-        }
+    chain.doFilter(request, wrapper);
+    Map<String, String> headers = new LinkedHashMap<>();
+    for (String name : wrapper.getHeaderNames()) {
+      if (replayedHeaders.contains(name.toLowerCase(Locale.ROOT)) && wrapper.getHeader(name) != null) {
+        headers.put(name, wrapper.getHeader(name));
       }
-      if (wrapper.getContentType() != null) {
-        headers.put(HttpHeaders.CONTENT_TYPE, wrapper.getContentType());
-      }
-      StoredResponse stored = new StoredResponse(wrapper.getStatus(), wrapper.getContentAsByteArray(), headers);
-      if (retention.retain(stored)) {
-        store.complete(key, stored, properties.ttl());
-        completed = true;
-      }
-    } finally {
-      if (!completed) {
-        try {
-          store.abandon(key);
-        } catch (RuntimeException e) {
-          logger.warn("could not release the idempotency claim; it expires with its lease", e);
-        }
-      }
-      wrapper.copyBodyToResponse();
     }
+    if (wrapper.getContentType() != null) {
+      headers.put(HttpHeaders.CONTENT_TYPE, wrapper.getContentType());
+    }
+    StoredResponse stored = new StoredResponse(wrapper.getStatus(), wrapper.getContentAsByteArray(), headers);
+    if (retention.retain(stored)) {
+      store.complete(key, token, stored, properties.ttl());
+    } else {
+      try {
+        store.abandon(key, token);
+      } catch (RuntimeException e) {
+        logger.warn("could not release the idempotency claim; retries remain blocked pending reconciliation", e);
+      }
+    }
+    wrapper.copyBodyToResponse();
   }
 
   /** The stored status, headers and body, marked as a replay; this request keeps its own request id. */

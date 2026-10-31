@@ -16,10 +16,11 @@ abstract class VendorMigrationsTest {
       assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Integer.class), table + " exists and is empty");
     }
     for (String component : new String[] {"outbox", "idempotency"}) {
+      int migrations = "idempotency".equals(component) ? 2 : 1;
       String applied = "SELECT COUNT(*) FROM flyway_schema_history_persimmon_" + component + " WHERE type = 'SQL' AND success = TRUE";
-      assertEquals(1, jdbc.queryForObject(applied, Integer.class), component);
+      assertEquals(migrations, jdbc.queryForObject(applied, Integer.class), component);
       FlywayComponentsAutoConfiguration.migrateComponents(jdbc.getDataSource());
-      assertEquals(1, jdbc.queryForObject(applied, Integer.class), component + ": a second run applies nothing");
+      assertEquals(migrations, jdbc.queryForObject(applied, Integer.class), component + ": a second run applies nothing");
     }
   }
 }

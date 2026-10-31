@@ -156,16 +156,47 @@ ResponseEntity<Void> confirm(@PathVariable String id) {
   `ProblemCatalog` bean. Spring MVC's own errors keep their standard shape. A `ProblemCustomizer`
   bean adds properties or response headers to every problem detail, the ones Spring MVC writes and
   the ones persimmon filters write before MVC (idempotency answers carry `code`
-  `idempotency.key-required`, `.key-too-long`, `.request-too-large`, `.in-progress`, `.key-reused`).
+  `idempotency.key-required`, `.key-too-long`, `.request-too-large`, `.in-progress`, `.result-unknown`, `.key-reused`).
 - `X-Request-Id` is read or generated and echoed; it is on the MDC for the request.
 - `persimmon-ddd-idempotency`: a client sends `Idempotency-Key` on an unsafe request; the first
   call runs, a retry with the same body replays the stored response with
   `Idempotent-Replayed: true` (its own `X-Request-Id`; a problem body keeps the first call's
-  `requestId`), a different body is 422, a concurrent duplicate is 409. Keys expire after `persimmon.ddd.idempotency.ttl` (24h). A 429 or
+  `requestId`), a different body is 422, a concurrent duplicate is 409. Completed responses expire after `persimmon.ddd.idempotency.ttl` (24h). A 429 or
   5xx is not stored, so a retry with the same key runs again; a `ResponseRetention` bean decides
   otherwise (e.g. keep a 504 that says the outcome is unknown).
 - `persimmon-ddd-openapi`: springdoc with the problem schema and default error responses on every
   operation; `/swagger-ui.html`.
+
+### Idempotency recovery and upgrades
+
+`lease` (default 1m) is how long an unfinished request reports `409 idempotency.in-progress`
+with `Retry-After: 1`. After the lease, it reports `409 idempotency.result-unknown` without
+`Retry-After`; neither a retry nor cleanup removes that pending claim, even after 24h. The
+original owner can still save its response after the lease. If execution or response persistence
+throws, the claim stays blocked and the filter does not send the buffered success response.
+Only a response explicitly rejected by `ResponseRetention` releases the pending claim.
+
+For a crashed request, reconcile with the system that performed the side effect. Record the
+recovered response, or release the claim only after proving the operation was not performed and
+the original execution can no longer send. Use the row's claim token when completing or releasing
+it. There is no automatic reconciliation endpoint; this is an operator or application recovery
+step. Do not delete unknown claims, switch keys, or extend the lease as a substitute for checking
+the external result. The default retention policy still releases 429 and 5xx responses; external
+integrations must supply a `ResponseRetention` that retains responses whose effects are unknown.
+
+The ownership fix adds nullable `claim_token` in migration V2 for H2, PostgreSQL and MySQL;
+V1 is unchanged. Apply V2 before running the new code (the Flyway module does this at startup).
+Existing completed responses still replay, and existing pending rows without a token stay
+blocked when their lease expires; reconcile those legacy rows separately. Custom
+`IdempotencyStore` implementations and direct callers must carry `Claim.Won.token()` into
+`complete` and `abandon`; completion must fail if the token no longer owns a pending row.
+
+Drain and stop every old instance, including its purge scheduler, before enabling new writers.
+Old instances do not check tokens and can still delete or overwrite new rows; mixed-version
+traffic is unsafe. For rollback, stop new writers first and leave the additive column in place;
+old code can read it but reinstates the original races and unsafe lease recovery, so keep keyed
+traffic stopped until the fixed version is restored. Do not drop the column or erase pending
+rows as part of rollback.
 
 ## 7. Between contexts
 
@@ -275,7 +306,7 @@ Properties, with defaults:
 | `persimmon.ddd.command.conflict-retries` | 3 | optimistic-lock retries |
 | `persimmon.ddd.kafka.consumer.enabled` / `topics` / `group-id` | false / [] / app name | the inbound bridge |
 | `persimmon.ddd.rabbit.consumer.enabled` / `bindings` / `queue` | false / {} / app name | the inbound bridge, exchange → pattern |
-| `persimmon.ddd.idempotency.ttl` / `lease` / `max-body-size` | 24h / 1m / 1MB | |
+| `persimmon.ddd.idempotency.ttl` / `lease` / `max-body-size` | 24h / 1m / 1MB | response retention / wait before reporting unknown (no automatic reclaim) / body limit |
 | `persimmon.ddd.idempotency.replayed-headers` | [] | response headers a replay carries besides `Content-Type`, `Location`, `ETag`, `Content-Language` |
 | `persimmon.ddd.tenancy.*` | off | section 9 |
 | `persimmon.ddd.flyway.enabled` | true | |

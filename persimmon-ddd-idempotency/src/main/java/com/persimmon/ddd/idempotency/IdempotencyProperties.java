@@ -13,7 +13,7 @@ public record IdempotencyProperties(
     @DefaultValue("Idempotency-Key") String header,
     /* How long a stored response is replayed. */
     @DefaultValue("24h") Duration ttl,
-    /* How long an in-progress claim blocks retries if the first request never settles. */
+    /* After this wait, a pending claim reports an unknown outcome; it still blocks execution. */
     @DefaultValue("1m") Duration lease,
     /* Reject unsafe requests that carry no key. */
     @DefaultValue("false") boolean requireKey,
