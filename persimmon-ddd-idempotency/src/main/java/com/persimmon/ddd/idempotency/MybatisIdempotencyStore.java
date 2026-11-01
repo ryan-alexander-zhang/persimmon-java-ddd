@@ -11,10 +11,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 
 /** The primary key is the lock: whoever inserts first owns the claim. */
 public class MybatisIdempotencyStore implements IdempotencyStore {
+  private static final Logger log = LoggerFactory.getLogger(MybatisIdempotencyStore.class);
   private static final TypeReference<Map<String, String>> HEADERS = new TypeReference<>() {};
 
   private final IdempotencyMapper mapper;
@@ -76,6 +79,7 @@ public class MybatisIdempotencyStore implements IdempotencyStore {
               .set("response_headers", json.writeValueAsString(response.headers()))
               .set("expires_at", clock.instant().plus(ttl)));
       if (updated != 1) {
+        log.warn("event=idempotency_record action=complete outcome=not_owned affected_rows={}", updated);
         throw new IllegalStateException("idempotency claim no longer owned; response was not saved");
       }
     } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
@@ -86,7 +90,9 @@ public class MybatisIdempotencyStore implements IdempotencyStore {
   @Override
   public void abandon(Key key, String token) {
     Objects.requireNonNull(token, "claim token");
-    mapper.delete(where(key).eq("claim_token", token).eq("state", "PENDING"));
+    int deleted = mapper.delete(where(key).eq("claim_token", token).eq("state", "PENDING"));
+    log.info("event=idempotency_record action=release outcome={} affected_rows={}",
+        deleted > 0 ? "released" : "not_matched", deleted);
   }
 
   @Override

@@ -28,6 +28,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -43,6 +45,7 @@ import org.springframework.web.util.ContentCachingResponseWrapper;
  * may retry them; a {@link ResponseRetention} bean changes which are.
  */
 public class IdempotencyFilter extends OncePerRequestFilter {
+  private static final Logger log = LoggerFactory.getLogger(IdempotencyFilter.class);
   private static final Set<String> REPLAYED_HEADERS =
       Set.of("content-type", "location", "etag", "content-language");
 
@@ -91,7 +94,14 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     }
     String principal = request.getUserPrincipal() == null ? "" : request.getUserPrincipal().getName();
     Key key = new Key(TenantContext.effective().value(), principal, rawKey);
-    Claim claim = store.claim(key, fingerprint(buffered), properties.lease());
+    String fingerprint = fingerprint(buffered);
+    Claim claim;
+    try {
+      claim = store.claim(key, fingerprint, properties.lease());
+    } catch (RuntimeException e) {
+      log.error("event=idempotency_decision outcome=error stage=claim error_type={}", e.getClass().getName());
+      throw e;
+    }
     switch (claim) {
       case Claim.Won won -> execute(buffered, response, chain, key, won.token());
       case Claim.Replay replay -> replay(response, replay.response());
@@ -121,28 +131,56 @@ public class IdempotencyFilter extends OncePerRequestFilter {
       headers.put(HttpHeaders.CONTENT_TYPE, wrapper.getContentType());
     }
     StoredResponse stored = new StoredResponse(wrapper.getStatus(), wrapper.getContentAsByteArray(), headers);
-    if (retention.retain(stored)) {
-      store.complete(key, token, stored, properties.ttl());
+    boolean retain;
+    try {
+      retain = retention.retain(stored);
+    } catch (RuntimeException e) {
+      log.error("event=idempotency_record action=retention outcome=error response_status={} error_type={}",
+          stored.status(), e.getClass().getName());
+      throw e;
+    }
+    if (retain) {
+      try {
+        store.complete(key, token, stored, properties.ttl());
+      } catch (RuntimeException e) {
+        log.error("event=idempotency_record action=complete outcome=error response_status={} error_type={}",
+            stored.status(), e.getClass().getName());
+        throw e;
+      }
+      log.info("event=idempotency_record action=complete outcome=saved response_status={}", stored.status());
     } else {
       try {
         store.abandon(key, token);
       } catch (RuntimeException e) {
-        logger.warn("could not release the idempotency claim; retries remain blocked pending reconciliation", e);
+        log.warn("event=idempotency_record action=release outcome=error response_status={} error_type={}",
+            stored.status(), e.getClass().getName());
       }
     }
-    wrapper.copyBodyToResponse();
+    try {
+      wrapper.copyBodyToResponse();
+    } catch (IOException | RuntimeException e) {
+      logWriteFailure("executed", stored.status(), e);
+      throw e;
+    }
   }
 
   /** The stored status, headers and body, marked as a replay; this request keeps its own request id. */
   private static void replay(HttpServletResponse response, StoredResponse stored) throws IOException {
+    log.info("event=idempotency_decision outcome=replay response_status={}", stored.status());
     response.setStatus(stored.status());
     stored.headers().forEach(response::setHeader);
     response.setHeader("Idempotent-Replayed", "true");
-    response.getOutputStream().write(stored.body());
+    try {
+      response.getOutputStream().write(stored.body());
+    } catch (IOException | RuntimeException e) {
+      logWriteFailure("replay", stored.status(), e);
+      throw e;
+    }
   }
 
   /** Written here, before MVC, so the {@link ProblemCustomizer}s are run here too. */
   private void problem(HttpServletResponse response, HttpStatus status, String type, String code, String detail) throws IOException {
+    log.info("event=idempotency_decision outcome=rejected code={} response_status={}", code, status.value());
     ProblemDetail body = Problems.stamp(ProblemDetail.forStatusAndDetail(status, detail));
     body.setType(URI.create(type));
     body.setProperty("code", code);
@@ -151,7 +189,17 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     headers.forEach((name, values) -> values.forEach(value -> response.addHeader(name, value)));
     response.setStatus(status.value());
     response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-    json.writeValue(response.getOutputStream(), body);
+    try {
+      json.writeValue(response.getOutputStream(), body);
+    } catch (IOException | RuntimeException e) {
+      logWriteFailure("problem", status.value(), e);
+      throw e;
+    }
+  }
+
+  private static void logWriteFailure(String source, int status, Exception failure) {
+    log.error("event=idempotency_response_write source={} outcome=error response_status={} error_type={}",
+        source, status, failure.getClass().getName());
   }
 
   /** SHA-256 over method, path, query, content type and body: what "the same request" means. */

@@ -173,8 +173,25 @@ ResponseEntity<Void> confirm(@PathVariable String id) {
 with `Retry-After: 1`. After the lease, it reports `409 idempotency.result-unknown` without
 `Retry-After`; neither a retry nor cleanup removes that pending claim, even after 24h. The
 original owner can still save its response after the lease. If execution or response persistence
-throws, the claim stays blocked and the filter does not send the buffered success response.
+throws, the filter does not release the claim or send the buffered success response.
 Only a response explicitly rejected by `ResponseRetention` releases the pending claim.
+
+Idempotency logs use the existing request-id/trace context:
+
+- `idempotency_decision`: replay or refusal with its problem code and selected response status;
+  a failed claim is marked `stage=claim`. These requests do not enter business execution.
+- `idempotency_record`: completion acknowledged by the store (`saved`), ownership check failure
+  (`not_owned`), or release's actual affected rows (`released` / `not_matched`). The MyBatis store
+  reports release counts; a custom store must report its own result because `abandon` returns void.
+  Errors identify `retention`, `complete`, or `release`; an operation error does not prove that
+  the database was unchanged, and a release error no longer asserts that retries remain blocked.
+- `idempotency_response_write`: failures while copying an executed response, replaying a stored
+  response, or writing a problem. `response_status` is the selected status, not proof of receipt.
+
+Expected decisions/results are INFO, ownership/release errors WARN, and other failures ERROR.
+Failure logs contain exception types, not messages, causes or stacks that may expose credentials.
+No raw key, claim token, URL, query, request/response body, or credential header is logged.
+Logging does not add a flush, change exception propagation, or change retention/retry behavior.
 
 For a crashed request, reconcile with the system that performed the side effect. Record the
 recovered response, or release the claim only after proving the operation was not performed and
