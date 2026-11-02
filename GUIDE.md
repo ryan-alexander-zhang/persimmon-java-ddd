@@ -32,6 +32,13 @@ on that name and nothing else: `boundedContextsShouldDependOnEachOtherOnlyThroug
 and the outbox's per-context delivery (section 7). Keep the first package segment under the
 application's base package equal to the context name.
 
+A context with one aggregate keeps each layer package flat. With several, split each layer by
+aggregate: `com.acme.shop.billing.domain.invoice`, `...billing.domain.payment`, and the same
+sub-packages under `application`, `infrastructure` and `adapter`. The layers are Maven modules, so
+the layer has to come before the aggregate; the rules match `..domain..`, `..application..` and so
+on at any depth, so the sub-packages need no configuration. What spans aggregates (the context's
+`ErrorCode` enum, a value object two aggregates share) stays in the layer package.
+
 The Maven graph enforces the layer arrows at compile time (`domain` sees `persimmon-ddd-core`
 only; `application` sees `domain` and `api`; `infrastructure` and `adapter` see `application`).
 `PersimmonDddRules.all()` in `ArchitectureTest` enforces what Maven cannot: no framework in the

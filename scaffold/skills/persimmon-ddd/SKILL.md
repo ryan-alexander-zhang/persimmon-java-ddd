@@ -15,6 +15,11 @@ A bounded context is a directory of five Maven modules and one package: `<contex
 package `com.example.app.<context>.<layer>`. The first package segment under `com.example.app` *is*
 the context name; ArchUnit and the outbox both key on it.
 
+One aggregate: keep each layer package flat, like `ordering/`. Several aggregates: split each layer
+by aggregate, `com.example.app.<context>.<layer>.<aggregate>` (`billing.domain.invoice`,
+`billing.application.invoice`, `billing.infrastructure.invoice`). What spans aggregates, such as
+the `ErrorCode` enum, stays in the layer package. Never put the aggregate before the layer.
+
 | layer | holds | may depend on |
 |---|---|---|
 | `domain` | `@AggregateRoot` extending `AbstractAggregateRoot`, `@ValueObject` records/enums, `DomainEvent` records, `Invariant`s, an `ErrorCode` enum, `@Repository` port interfaces | `persimmon-ddd-core`, JDK |
