@@ -169,7 +169,12 @@ ResponseEntity<Void> confirm(@PathVariable String id) {
   call runs, a retry with the same body replays the stored response with
   `Idempotent-Replayed: true` (its own `X-Request-Id`; a problem body keeps the first call's
   `requestId`), a different request (method, path, query, content type, body, and any header
-  named in `persimmon.ddd.idempotency.fingerprint-headers`) is 422, a concurrent duplicate is 409. Completed responses expire after `persimmon.ddd.idempotency.ttl` (24h). A 429 or
+  named in `persimmon.ddd.idempotency.fingerprint-headers`) is 422, a concurrent duplicate is 409.
+  A key is unique per tenant and principal; headers named in `key-scope-headers` narrow it further,
+  so the same key under another value of one (or absent instead of empty) is a separate call that
+  runs. Then the `principal` column holds a SHA-256 of the principal and those headers instead of
+  the principal; no migration, and the key keeps its 255 characters. Declaring or changing the list
+  re-keys every request, so a retry of a call made before the change runs again. Completed responses expire after `persimmon.ddd.idempotency.ttl` (24h). A 429 or
   5xx is not stored, so a retry with the same key runs again; a `ResponseRetention` bean decides
   otherwise (e.g. keep a 504 that says the outcome is unknown).
 - `persimmon-ddd-openapi`: springdoc with the problem schema and default error responses on every
@@ -334,6 +339,7 @@ Properties, with defaults:
 | `persimmon.ddd.idempotency.ttl` / `lease` / `max-body-size` | 24h / 1m / 1MB | response retention / wait before reporting unknown (no automatic reclaim) / body limit |
 | `persimmon.ddd.idempotency.replayed-headers` | [] | response headers a replay carries besides `Content-Type`, `Location`, `ETag`, `Content-Language` |
 | `persimmon.ddd.idempotency.fingerprint-headers` | [] | request headers that are part of "the same request" (e.g. one that names who the call is for); another value, or absent instead of empty, under the same key is 422 |
+| `persimmon.ddd.idempotency.key-scope-headers` | [] | request headers that scope the key next to tenant and principal (e.g. caller and the party the call is for); another value, or absent instead of empty, is another key that runs |
 | `persimmon.ddd.tenancy.*` | off | section 9 |
 | `persimmon.ddd.flyway.enabled` | true | |
 

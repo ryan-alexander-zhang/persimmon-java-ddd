@@ -22,4 +22,6 @@ public record IdempotencyProperties(
     /* Response headers replayed besides Content-Type, Location, ETag and Content-Language. */
     @DefaultValue List<String> replayedHeaders,
     /* Request headers that are part of "the same request": a different value under the same key is 422. */
-    @DefaultValue List<String> fingerprintHeaders) {}
+    @DefaultValue List<String> fingerprintHeaders,
+    /* Request headers that scope the key: another value of one is another key, which runs on its own. */
+    @DefaultValue List<String> keyScopeHeaders) {}

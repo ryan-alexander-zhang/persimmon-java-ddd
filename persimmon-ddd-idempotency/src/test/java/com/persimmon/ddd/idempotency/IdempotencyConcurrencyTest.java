@@ -250,7 +250,7 @@ class IdempotencyConcurrencyTest {
 
   private IdempotencyFilter filter(IdempotencyStore store) {
     return new IdempotencyFilter(store,
-        new IdempotencyProperties(true, "Idempotency-Key", TTL, LEASE, false, List.of("POST"), DataSize.ofMegabytes(1), List.of(), List.of()),
+        new IdempotencyProperties(true, "Idempotency-Key", TTL, LEASE, false, List.of("POST"), DataSize.ofMegabytes(1), List.of(), List.of(), List.of()),
         json, ResponseRetention.DEFAULT, List.of());
   }
 
