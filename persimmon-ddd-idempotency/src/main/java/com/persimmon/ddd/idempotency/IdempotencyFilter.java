@@ -22,6 +22,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Collections;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,8 +39,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 
 /**
- * A request with an {@code Idempotency-Key} runs once per (tenant, principal, key). A retry with
- * the same body gets the stored response; a different body under the same key is 422; a retry
+ * A request with an {@code Idempotency-Key} runs once per (tenant, principal, key). "The same
+ * request" is the same method, path, query, content type, body and declared
+ * {@code fingerprint-headers}. A retry of the same request gets the stored response; a different
+ * request under the same key is 422; a retry
  * while the first is still running is 409. An expired pending claim returns 409 result-unknown
  * until its outcome is reconciled; it never permits automatic re-execution. Responses of 429 and 5xx are not stored, so the client
  * may retry them; a {@link ResponseRetention} bean changes which are.
@@ -56,6 +59,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
   private final List<ProblemCustomizer> customizers;
   private final Set<String> methods;
   private final Set<String> replayedHeaders;
+  private final List<String> fingerprintHeaders;
 
   public IdempotencyFilter(IdempotencyStore store, IdempotencyProperties properties, ObjectMapper json, ResponseRetention retention,
       List<ProblemCustomizer> customizers) {
@@ -67,6 +71,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     this.methods = properties.methods().stream().map(m -> m.toUpperCase(Locale.ROOT)).collect(java.util.stream.Collectors.toSet());
     this.replayedHeaders = new java.util.HashSet<>(REPLAYED_HEADERS);
     properties.replayedHeaders().forEach(h -> replayedHeaders.add(h.toLowerCase(Locale.ROOT)));
+    this.fingerprintHeaders = properties.fingerprintHeaders().stream().map(h -> h.toLowerCase(Locale.ROOT)).distinct().sorted().toList();
   }
 
   @Override
@@ -202,13 +207,26 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         source, status, failure.getClass().getName());
   }
 
-  /** SHA-256 over method, path, query, content type and body: what "the same request" means. */
-  private static String fingerprint(BufferedRequest request) {
+  /**
+   * SHA-256 over method, path, query, content type, declared headers and body: what "the same
+   * request" means. Each declared header is its lowercased name, its value count (0 when absent)
+   * and each value length-prefixed, so absent and empty differ; none declared hashes as before.
+   */
+  private String fingerprint(BufferedRequest request) {
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
       for (String part : List.of(request.getMethod(), request.getRequestURI(), String.valueOf(request.getQueryString()), String.valueOf(request.getContentType()))) {
         digest.update(part.getBytes(StandardCharsets.UTF_8));
         digest.update((byte) '\n');
+      }
+      for (String name : fingerprintHeaders) {
+        List<String> values = Collections.list(request.getHeaders(name));
+        digest.update((name + '\n' + values.size() + '\n').getBytes(StandardCharsets.UTF_8));
+        for (String value : values) {
+          byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+          digest.update((bytes.length + ":").getBytes(StandardCharsets.UTF_8));
+          digest.update(bytes);
+        }
       }
       digest.update(request.body);
       return HexFormat.of().formatHex(digest.digest());

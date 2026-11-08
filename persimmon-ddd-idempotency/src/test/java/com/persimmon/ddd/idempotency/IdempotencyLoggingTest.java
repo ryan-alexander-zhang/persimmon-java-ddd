@@ -348,7 +348,7 @@ class IdempotencyLoggingTest {
       HttpServletResponse response, FilterChain chain) throws Exception {
     IdempotencyFilter filter = new IdempotencyFilter(target,
         new IdempotencyProperties(true, "Idempotency-Key", TTL, LEASE, true,
-            List.of("POST"), DataSize.ofBytes(1024), List.of()), json, retention, List.of());
+            List.of("POST"), DataSize.ofBytes(1024), List.of(), List.of()), json, retention, List.of());
     new RequestIdFilter("X-Request-Id").doFilter(request, response,
         (r, s) -> filter.doFilter(r, s, chain));
   }

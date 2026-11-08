@@ -20,4 +20,6 @@ public record IdempotencyProperties(
     @DefaultValue({"POST", "PUT", "PATCH", "DELETE"}) List<String> methods,
     @DefaultValue("1MB") DataSize maxBodySize,
     /* Response headers replayed besides Content-Type, Location, ETag and Content-Language. */
-    @DefaultValue List<String> replayedHeaders) {}
+    @DefaultValue List<String> replayedHeaders,
+    /* Request headers that are part of "the same request": a different value under the same key is 422. */
+    @DefaultValue List<String> fingerprintHeaders) {}
