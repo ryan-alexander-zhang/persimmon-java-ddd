@@ -7,7 +7,7 @@
   <parent>
     <groupId>com.persimmon.ddd</groupId>
     <artifactId>persimmon-ddd-parent</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.1-SNAPSHOT</version>
   </parent>
 
   <!-- Transactional outbox over MyBatis-Plus: write with the command, relay with leases, retry, dead-letter, inbox dedup. -->

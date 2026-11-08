@@ -6,7 +6,7 @@
 
   <groupId>com.persimmon.ddd</groupId>
   <artifactId>persimmon-ddd-parent</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.1.1-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>persimmon-ddd</name>
   <description>Lean tactical DDD building blocks for Java, used by Persimmon-created projects.</description>

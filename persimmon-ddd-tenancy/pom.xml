@@ -7,7 +7,7 @@
   <parent>
     <groupId>com.persimmon.ddd</groupId>
     <artifactId>persimmon-ddd-parent</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.1-SNAPSHOT</version>
   </parent>
 
   <!-- Pool-model multi-tenancy: tenant from the request, bound to the thread, enforced in SQL. Off until enabled. -->

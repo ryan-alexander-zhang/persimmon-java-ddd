@@ -6,7 +6,7 @@
 
   <groupId>com.persimmon.ddd</groupId>
   <artifactId>persimmon-ddd-bom</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.1.1-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>persimmon-ddd-bom</name>
   <description>Import this to get one version for every persimmon-ddd module. It manages nothing else.</description>
