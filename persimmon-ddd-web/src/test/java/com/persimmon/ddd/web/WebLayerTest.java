@@ -59,6 +59,8 @@ class WebLayerTest {
 
   record Body(@NotBlank String name) {}
 
+  record Violation(String rule, String detail) {}
+
   @SpringBootConfiguration
   @EnableAutoConfiguration
   @RestController
@@ -87,6 +89,22 @@ class WebLayerTest {
     @PostMapping("/t/family")
     void family() {
       throw new DomainException(Code.ORDER_REJECTED, "rejected");
+    }
+
+    @PostMapping("/t/properties")
+    void properties() {
+      throw new DomainException(Code.ORDER_REJECTED, "rejected")
+          .with("field", "country")
+          .with("rules", List.of("BR-36", "BR-39"))
+          .with("candidatesLeft", 0)
+          .with("invariants", List.of(new Violation("BR-36", "no proxy left")))
+          .with("code", "spoofed")
+          .with("status", 200);
+    }
+
+    @PostMapping("/t/not-found-properties")
+    void notFoundProperties() {
+      throw new EntityNotFoundException("no such proxy").with("proxy", "p-1000007");
     }
 
     @PostMapping("/t/not-found")
@@ -145,6 +163,22 @@ class WebLayerTest {
         .andExpect(status().isUnprocessableEntity())
         .andExpect(jsonPath("$.type").value("/problems/domain-rule-violation"))
         .andExpect(jsonPath("$.code").value("ordering.order-rejected"));
+  }
+
+  @Test
+  void exceptionPropertiesBecomeProblemMembersButNeverReplaceTheFrameworksOwn() throws Exception {
+    mvc.perform(post("/t/properties"))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.field").value("country"))
+        .andExpect(jsonPath("$.rules[1]").value("BR-39"))
+        .andExpect(jsonPath("$.candidatesLeft").value(0))
+        .andExpect(jsonPath("$.invariants[0].rule").value("BR-36"))
+        .andExpect(jsonPath("$.invariants[0].detail").value("no proxy left"))
+        .andExpect(jsonPath("$.code").value("ordering.order-rejected"))
+        .andExpect(jsonPath("$.status").value(422));
+    mvc.perform(post("/t/not-found-properties"))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.proxy").value("p-1000007"));
   }
 
   @Test

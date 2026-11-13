@@ -160,7 +160,11 @@ ResponseEntity<Void> confirm(@PathVariable String id) {
 
 - Every `DomainException` becomes an RFC 9457 problem detail with `code`, `title`, `status`,
   `detail`, `instance`, and `errors[]` for validation. Override title or status per code with a
-  `ProblemCatalog` bean. Spring MVC's own errors keep their standard shape. A `ProblemCustomizer`
+  `ProblemCatalog` bean. Members a client needs besides `code` and `detail` ride on the exception:
+  `throw new DomainException(code, "...").with("field", "country").with("rules", List.of("BR-36"))`
+  (strings, numbers, booleans, lists, maps, records). A property named like a member the framework
+  writes (`type`, `title`, `status`, `detail`, `instance`, `code`, `errors`, `requestId`,
+  `traceId`) is dropped. Spring MVC's own errors keep their standard shape. A `ProblemCustomizer`
   bean adds properties or response headers to every problem detail, the ones Spring MVC writes and
   the ones persimmon filters write before MVC (idempotency answers carry `code`
   `idempotency.key-required`, `.key-too-long`, `.request-too-large`, `.in-progress`, `.result-unknown`, `.key-reused`).

@@ -6,6 +6,7 @@ import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
@@ -17,6 +18,10 @@ public final class Problems {
 
   /** MDC key the OpenTelemetry Java agent fills; read when Micrometer's is absent. */
   public static final String TRACE_ID_MDC_KEY = "trace_id";
+
+  /** Members the framework writes; an exception property of the same name is dropped. */
+  private static final Set<String> RESERVED =
+      Set.of("type", "title", "status", "detail", "instance", "code", "errors", "requestId", "traceId");
 
   private final Map<String, ProblemDescriptor> overrides = new HashMap<>();
 
@@ -37,6 +42,11 @@ public final class Problems {
     detail.setTitle(descriptor.title());
     detail.setDetail(ex.getMessage());
     ex.errorCode().ifPresent(code -> detail.setProperty("code", code.code()));
+    ex.properties().forEach((name, value) -> {
+      if (!RESERVED.contains(name)) {
+        detail.setProperty(name, value);
+      }
+    });
     return stamp(detail);
   }
 
