@@ -35,6 +35,7 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.CannotCreateTransactionException;
+import org.springframework.transaction.TransactionSystemException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -135,6 +136,21 @@ class WebLayerTest {
       throw new RuntimeException(new SQLTransientConnectionException("pool timeout"));
     }
 
+    @PostMapping("/t/rollback-failed")
+    void rollbackFailed() {
+      throw new TransactionSystemException("JDBC rollback failed", new SQLException("An I/O error occurred", "08006"));
+    }
+
+    @PostMapping("/t/server-shutdown")
+    void serverShutdown() {
+      throw new IllegalStateException(new SQLException("terminating connection due to administrator command", "57P01"));
+    }
+
+    @PostMapping("/t/bad-sql")
+    void badSql() {
+      throw new IllegalStateException(new SQLException("syntax error", "42601"));
+    }
+
     @PostMapping("/t/upstream-down")
     void upstreamDown() {
       throw new DomainException(Code.UPSTREAM_DOWN, "payment provider down");
@@ -216,7 +232,7 @@ class WebLayerTest {
 
   @Test
   void anUnavailableStoreAnswers503WithTheConfiguredCodeAndRetryAfter() throws Exception {
-    for (String path : List.of("/t/store-down", "/t/no-transaction", "/t/jdbc-down")) {
+    for (String path : List.of("/t/store-down", "/t/no-transaction", "/t/jdbc-down", "/t/rollback-failed", "/t/server-shutdown")) {
       mvc.perform(post(path))
           .andExpect(status().isServiceUnavailable())
           .andExpect(header().string("Retry-After", "3"))
@@ -227,6 +243,11 @@ class WebLayerTest {
           .andExpect(jsonPath("$.source").value("app"))
           .andExpect(jsonPath("$.requestId").value(notNullValue()));
     }
+  }
+
+  @Test
+  void anSqlExceptionWithAnotherSqlStateIsStill500() throws Exception {
+    mvc.perform(post("/t/bad-sql")).andExpect(status().isInternalServerError()).andExpect(header().doesNotExist("Retry-After"));
   }
 
   @Test

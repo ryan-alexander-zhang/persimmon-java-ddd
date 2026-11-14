@@ -167,7 +167,8 @@ ResponseEntity<Void> confirm(@PathVariable String id) {
   `traceId`) is dropped. Spring MVC's own errors keep their standard shape. An unavailable
   dependency answers 503 `/problems/service-unavailable` instead of 500: a JDBC connection or
   timeout failure (`SQLTransientConnectionException`, `SQLNonTransientConnectionException`,
-  `SQLTimeoutException`) or Spring's `DataAccessResourceFailureException` (incl.
+  `SQLTimeoutException`, or any `SQLException` whose SQLState is class `08` or PostgreSQL's
+  `57P01`-`57P03`) or Spring's `DataAccessResourceFailureException` (incl.
   `CannotGetJdbcConnectionException`), `TransientDataAccessResourceException`,
   `QueryTimeoutException`, `CannotCreateTransactionException`, anywhere in the cause chain. It
   carries `persimmon.ddd.web.unavailable.code` when set and is logged at WARN with class names

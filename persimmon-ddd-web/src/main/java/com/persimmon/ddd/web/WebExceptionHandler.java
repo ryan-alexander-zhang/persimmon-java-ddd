@@ -3,11 +3,13 @@ package com.persimmon.ddd.web;
 import com.persimmon.ddd.core.DomainException;
 import com.persimmon.ddd.core.ErrorCategory;
 import com.persimmon.ddd.core.ErrorCode;
+import java.sql.SQLException;
 import java.sql.SQLNonTransientConnectionException;
 import java.sql.SQLTimeoutException;
 import java.sql.SQLTransientConnectionException;
 import java.time.Duration;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,17 +28,25 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 /**
  * Every failure leaves as a problem detail. Spring MVC's own exceptions keep their standard
  * mapping from {@link ResponseEntityExceptionHandler}; this adds the domain, validation detail,
- * 503 for an unavailable dependency (a JDBC connection or timeout failure, or Spring's
- * data-access equivalents, anywhere in the cause chain) and the last-resort 500. Every 503 carries
+ * 503 for an unavailable dependency (a JDBC connection or timeout failure, by type or by SQLState,
+ * or Spring's data-access equivalents, anywhere in the cause chain) and the last-resort 500. Every 503 carries
  * {@code Retry-After}.
  */
 @RestControllerAdvice
 public class WebExceptionHandler extends ResponseEntityExceptionHandler {
   private static final Logger log = LoggerFactory.getLogger(WebExceptionHandler.class);
 
+  /**
+   * Drivers report a lost connection by SQLState more often than by type: class 08 is the SQL
+   * standard's connection exception; 57P01-57P03 are PostgreSQL's shutdown and cannot-connect-now.
+   */
+  private static final Set<String> UNAVAILABLE_SQL_STATES = Set.of("57P01", "57P02", "57P03");
+
   private static final Predicate<Throwable> JDBC_UNAVAILABLE = t -> t instanceof SQLTransientConnectionException
       || t instanceof SQLNonTransientConnectionException
-      || t instanceof SQLTimeoutException;
+      || t instanceof SQLTimeoutException
+      || t instanceof SQLException sql && sql.getSQLState() != null
+          && (sql.getSQLState().startsWith("08") || UNAVAILABLE_SQL_STATES.contains(sql.getSQLState()));
 
   private final Problems problems;
   private final Predicate<Throwable> unavailable;
