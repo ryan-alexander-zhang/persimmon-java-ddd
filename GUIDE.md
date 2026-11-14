@@ -170,14 +170,15 @@ ResponseEntity<Void> confirm(@PathVariable String id) {
   `SQLTimeoutException`, or any `SQLException` whose SQLState is class `08` or PostgreSQL's
   `57P01`-`57P03`) or Spring's `DataAccessResourceFailureException` (incl.
   `CannotGetJdbcConnectionException`), `TransientDataAccessResourceException`,
-  `QueryTimeoutException`, `CannotCreateTransactionException`, anywhere in the cause chain. It
+  `QueryTimeoutException`, `CannotCreateTransactionException`, anywhere in the cause chain or, for a
+  `TransactionSystemException` from a failed rollback, in its application exception's chain. It
   carries `persimmon.ddd.web.unavailable.code` when set and is logged at WARN with class names
   only. Throw a `DomainException` whose code has `ErrorCategory.UNAVAILABLE` for other
   dependencies (an upstream API). Every 503 carries `Retry-After`
   (`persimmon.ddd.web.unavailable.retry-after`, 1s). A `ProblemCustomizer`
   bean adds properties or response headers to every problem detail, the ones Spring MVC writes and
   the ones persimmon filters write before MVC (idempotency answers carry `code`
-  `idempotency.key-required`, `.key-too-long`, `.request-too-large`, `.in-progress`, `.result-unknown`, `.key-reused`).
+  `idempotency.key-required`, `.key-too-long`, `.request-too-large`, `.in-progress`, `.result-unknown`, `.key-reused`, `.unavailable`).
 - `X-Request-Id` is read or generated and echoed; it is on the MDC for the request.
 - `persimmon-ddd-idempotency`: a client sends `Idempotency-Key` on an unsafe request; the first
   call runs, a retry with the same body replays the stored response with
@@ -202,6 +203,9 @@ with `Retry-After: 1`. After the lease, it reports `409 idempotency.result-unkno
 original owner can still save its response after the lease. If execution or response persistence
 throws, the filter does not release the claim or send the buffered success response.
 Only a response explicitly rejected by `ResponseRetention` releases the pending claim.
+A claim that fails because the store is unreachable (the same rule as the web module's 503) answers
+`503 idempotency.unavailable` with `Retry-After` before the handler runs; any other claim failure
+escapes as before.
 
 Idempotency logs use the existing request-id/trace context:
 

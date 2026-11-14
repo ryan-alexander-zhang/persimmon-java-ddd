@@ -1,7 +1,7 @@
 package com.persimmon.ddd.web;
 
 import jakarta.validation.ConstraintViolationException;
-import java.util.function.Predicate;
+import java.time.Duration;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -28,11 +28,19 @@ public class WebAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  public WebExceptionHandler persimmonWebExceptionHandler(Problems problems, WebProperties properties) {
-    Predicate<Throwable> unavailable = ClassUtils.isPresent(
-        "org.springframework.dao.DataAccessResourceFailureException", WebAutoConfiguration.class.getClassLoader())
-        ? new DataAccessUnavailable() : t -> false;
-    return new WebExceptionHandler(problems, unavailable, properties.unavailable());
+  public UnavailableDependencies persimmonUnavailableDependencies(WebProperties properties) {
+    Duration retryAfter = properties.unavailable().retryAfter();
+    if (ClassUtils.isPresent("org.springframework.dao.DataAccessResourceFailureException", WebAutoConfiguration.class.getClassLoader())) {
+      return new UnavailableDependencies(new DataAccessUnavailable(), DataAccessUnavailable::applicationException, retryAfter);
+    }
+    return new UnavailableDependencies(t -> false, t -> null, retryAfter);
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  public WebExceptionHandler persimmonWebExceptionHandler(
+      Problems problems, UnavailableDependencies unavailable, WebProperties properties) {
+    return new WebExceptionHandler(problems, unavailable, properties.unavailable().code());
   }
 
   @Bean

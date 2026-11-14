@@ -7,6 +7,7 @@ import com.persimmon.ddd.idempotency.IdempotencyStore.Key;
 import com.persimmon.ddd.idempotency.IdempotencyStore.StoredResponse;
 import com.persimmon.ddd.web.ProblemCustomizer;
 import com.persimmon.ddd.web.Problems;
+import com.persimmon.ddd.web.UnavailableDependencies;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletException;
@@ -22,6 +23,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -45,7 +47,8 @@ import org.springframework.web.util.ContentCachingResponseWrapper;
  * {@code fingerprint-headers}. A retry of the same request gets the stored response; a different
  * request under the same key is 422; a retry
  * while the first is still running is 409. An expired pending claim returns 409 result-unknown
- * until its outcome is reconciled; it never permits automatic re-execution. Responses of 429 and 5xx are not stored, so the client
+ * until its outcome is reconciled; it never permits automatic re-execution. A claim that fails
+ * because the store is unavailable is 503 {@code idempotency.unavailable} with {@code Retry-After}. Responses of 429 and 5xx are not stored, so the client
  * may retry them; a {@link ResponseRetention} bean changes which are.
  */
 public class IdempotencyFilter extends OncePerRequestFilter {
@@ -62,9 +65,16 @@ public class IdempotencyFilter extends OncePerRequestFilter {
   private final Set<String> replayedHeaders;
   private final List<String> fingerprintHeaders;
   private final List<String> keyScopeHeaders;
+  private final UnavailableDependencies unavailable;
 
   public IdempotencyFilter(IdempotencyStore store, IdempotencyProperties properties, ObjectMapper json, ResponseRetention retention,
       List<ProblemCustomizer> customizers) {
+    this(store, properties, json, retention, customizers, new UnavailableDependencies(t -> false, t -> null, Duration.ofSeconds(1)));
+  }
+
+  public IdempotencyFilter(IdempotencyStore store, IdempotencyProperties properties, ObjectMapper json, ResponseRetention retention,
+      List<ProblemCustomizer> customizers, UnavailableDependencies unavailable) {
+    this.unavailable = unavailable;
     this.store = store;
     this.properties = properties;
     this.json = json;
@@ -107,8 +117,16 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     try {
       claim = store.claim(key, fingerprint, properties.lease());
     } catch (RuntimeException e) {
-      log.error("event=idempotency_decision outcome=error stage=claim error_type={}", e.getClass().getName());
-      throw e;
+      Throwable cause = unavailable.cause(e);
+      if (cause == null) {
+        log.error("event=idempotency_decision outcome=error stage=claim error_type={}", e.getClass().getName());
+        throw e;
+      }
+      log.warn("event=idempotency_decision outcome=unavailable stage=claim error_type={} cause_type={}",
+          e.getClass().getName(), cause.getClass().getName());
+      response.setHeader(HttpHeaders.RETRY_AFTER, unavailable.retryAfter());
+      problem(response, HttpStatus.SERVICE_UNAVAILABLE, "/problems/service-unavailable", "idempotency.unavailable", UnavailableDependencies.DETAIL);
+      return;
     }
     switch (claim) {
       case Claim.Won won -> execute(buffered, response, chain, key, won.token());

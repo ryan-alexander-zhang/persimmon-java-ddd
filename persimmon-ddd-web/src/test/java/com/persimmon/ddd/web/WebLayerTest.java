@@ -141,6 +141,19 @@ class WebLayerTest {
       throw new TransactionSystemException("JDBC rollback failed", new SQLException("An I/O error occurred", "08006"));
     }
 
+    @PostMapping("/t/rollback-after-lost-connection")
+    void rollbackAfterLostConnection() {
+      TransactionSystemException failed = new TransactionSystemException("JDBC rollback failed", new SQLException("Connection is closed"));
+      failed.initApplicationException(new DataAccessResourceFailureException("Failed to obtain JDBC Connection",
+          new SQLTransientConnectionException("HikariPool-1 - Connection is not available, request timed out")));
+      throw failed;
+    }
+
+    @PostMapping("/t/rollback-only-failed")
+    void rollbackOnlyFailed() {
+      throw new TransactionSystemException("JDBC rollback failed", new SQLException("Connection is closed"));
+    }
+
     @PostMapping("/t/server-shutdown")
     void serverShutdown() {
       throw new IllegalStateException(new SQLException("terminating connection due to administrator command", "57P01"));
@@ -232,7 +245,7 @@ class WebLayerTest {
 
   @Test
   void anUnavailableStoreAnswers503WithTheConfiguredCodeAndRetryAfter() throws Exception {
-    for (String path : List.of("/t/store-down", "/t/no-transaction", "/t/jdbc-down", "/t/rollback-failed", "/t/server-shutdown")) {
+    for (String path : List.of("/t/store-down", "/t/no-transaction", "/t/jdbc-down", "/t/rollback-failed", "/t/server-shutdown", "/t/rollback-after-lost-connection")) {
       mvc.perform(post(path))
           .andExpect(status().isServiceUnavailable())
           .andExpect(header().string("Retry-After", "3"))
@@ -248,6 +261,7 @@ class WebLayerTest {
   @Test
   void anSqlExceptionWithAnotherSqlStateIsStill500() throws Exception {
     mvc.perform(post("/t/bad-sql")).andExpect(status().isInternalServerError()).andExpect(header().doesNotExist("Retry-After"));
+    mvc.perform(post("/t/rollback-only-failed")).andExpect(status().isInternalServerError());
   }
 
   @Test
