@@ -13,9 +13,12 @@ import com.persimmon.ddd.application.Cursor;
 import com.persimmon.ddd.application.EntityNotFoundException;
 import com.persimmon.ddd.application.Slice;
 import com.persimmon.ddd.core.DomainException;
+import com.persimmon.ddd.core.ErrorCategory;
 import com.persimmon.ddd.core.ErrorCode;
 import com.persimmon.ddd.core.IllegalStateTransitionException;
 import jakarta.validation.ConstraintViolationException;
+import java.sql.SQLException;
+import java.sql.SQLTransientConnectionException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.List;
@@ -28,22 +31,27 @@ import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+    "persimmon.ddd.web.unavailable.code=test.store-unavailable",
+    "persimmon.ddd.web.unavailable.retry-after=2500ms"})
 @AutoConfigureMockMvc
 class WebLayerTest {
   @Autowired MockMvc mvc;
 
   enum Code implements ErrorCode {
     CREDIT_EXCEEDED("ordering.credit-exceeded"),
-    ORDER_REJECTED("ordering.order-rejected");
+    ORDER_REJECTED("ordering.order-rejected"),
+    UPSTREAM_DOWN("ordering.upstream-down");
 
     private final String code;
 
@@ -54,6 +62,11 @@ class WebLayerTest {
     @Override
     public String code() {
       return code;
+    }
+
+    @Override
+    public ErrorCategory category() {
+      return this == UPSTREAM_DOWN ? ErrorCategory.UNAVAILABLE : ErrorCategory.DOMAIN_RULE;
     }
   }
 
@@ -105,6 +118,26 @@ class WebLayerTest {
     @PostMapping("/t/not-found-properties")
     void notFoundProperties() {
       throw new EntityNotFoundException("no such proxy").with("proxy", "p-1000007");
+    }
+
+    @PostMapping("/t/store-down")
+    void storeDown() {
+      throw new IllegalStateException("mapper failed", new DataAccessResourceFailureException("password=secret"));
+    }
+
+    @PostMapping("/t/no-transaction")
+    void noTransaction() {
+      throw new CannotCreateTransactionException("Could not open JDBC Connection", new SQLException("password=secret"));
+    }
+
+    @PostMapping("/t/jdbc-down")
+    void jdbcDown() {
+      throw new RuntimeException(new SQLTransientConnectionException("pool timeout"));
+    }
+
+    @PostMapping("/t/upstream-down")
+    void upstreamDown() {
+      throw new DomainException(Code.UPSTREAM_DOWN, "payment provider down");
     }
 
     @PostMapping("/t/not-found")
@@ -179,6 +212,29 @@ class WebLayerTest {
     mvc.perform(post("/t/not-found-properties"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.proxy").value("p-1000007"));
+  }
+
+  @Test
+  void anUnavailableStoreAnswers503WithTheConfiguredCodeAndRetryAfter() throws Exception {
+    for (String path : List.of("/t/store-down", "/t/no-transaction", "/t/jdbc-down")) {
+      mvc.perform(post(path))
+          .andExpect(status().isServiceUnavailable())
+          .andExpect(header().string("Retry-After", "3"))
+          .andExpect(header().string("X-Source", "app"))
+          .andExpect(jsonPath("$.type").value("/problems/service-unavailable"))
+          .andExpect(jsonPath("$.code").value("test.store-unavailable"))
+          .andExpect(jsonPath("$.detail").value("A dependency this service needs is unavailable; retry later."))
+          .andExpect(jsonPath("$.source").value("app"))
+          .andExpect(jsonPath("$.requestId").value(notNullValue()));
+    }
+  }
+
+  @Test
+  void aDomainExceptionOfCategoryUnavailableAnswers503WithRetryAfter() throws Exception {
+    mvc.perform(post("/t/upstream-down"))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(header().string("Retry-After", "3"))
+        .andExpect(jsonPath("$.code").value("ordering.upstream-down"));
   }
 
   @Test

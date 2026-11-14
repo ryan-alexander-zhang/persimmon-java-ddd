@@ -1,6 +1,7 @@
 package com.persimmon.ddd.web;
 
 import jakarta.validation.ConstraintViolationException;
+import java.util.function.Predicate;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -13,6 +14,7 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
+import org.springframework.util.ClassUtils;
 
 @AutoConfiguration
 @ConditionalOnWebApplication(type = Type.SERVLET)
@@ -26,8 +28,11 @@ public class WebAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  public WebExceptionHandler persimmonWebExceptionHandler(Problems problems) {
-    return new WebExceptionHandler(problems);
+  public WebExceptionHandler persimmonWebExceptionHandler(Problems problems, WebProperties properties) {
+    Predicate<Throwable> unavailable = ClassUtils.isPresent(
+        "org.springframework.dao.DataAccessResourceFailureException", WebAutoConfiguration.class.getClassLoader())
+        ? new DataAccessUnavailable() : t -> false;
+    return new WebExceptionHandler(problems, unavailable, properties.unavailable());
   }
 
   @Bean

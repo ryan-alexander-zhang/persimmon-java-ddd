@@ -8,5 +8,7 @@ public enum ErrorCategory {
   VALIDATION,
   UNAUTHORIZED,
   FORBIDDEN,
+  /** A dependency (database, broker, upstream) is unavailable; the client may retry later. */
+  UNAVAILABLE,
   UNEXPECTED
 }

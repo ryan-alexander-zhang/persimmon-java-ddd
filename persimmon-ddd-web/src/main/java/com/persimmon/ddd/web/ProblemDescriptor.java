@@ -17,6 +17,8 @@ public record ProblemDescriptor(String type, int status, String title) {
               new ProblemDescriptor("/problems/validation-failed", 400, "Validation failed"),
           ErrorCategory.UNAUTHORIZED, new ProblemDescriptor("/problems/unauthorized", 401, "Unauthorized"),
           ErrorCategory.FORBIDDEN, new ProblemDescriptor("/problems/forbidden", 403, "Forbidden"),
+          ErrorCategory.UNAVAILABLE,
+              new ProblemDescriptor("/problems/service-unavailable", 503, "Service unavailable"),
           ErrorCategory.UNEXPECTED, new ProblemDescriptor("about:blank", 500, "Internal Server Error"));
 
   public ProblemDescriptor {

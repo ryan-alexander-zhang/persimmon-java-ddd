@@ -164,7 +164,16 @@ ResponseEntity<Void> confirm(@PathVariable String id) {
   `throw new DomainException(code, "...").with("field", "country").with("rules", List.of("BR-36"))`
   (strings, numbers, booleans, lists, maps, records). A property named like a member the framework
   writes (`type`, `title`, `status`, `detail`, `instance`, `code`, `errors`, `requestId`,
-  `traceId`) is dropped. Spring MVC's own errors keep their standard shape. A `ProblemCustomizer`
+  `traceId`) is dropped. Spring MVC's own errors keep their standard shape. An unavailable
+  dependency answers 503 `/problems/service-unavailable` instead of 500: a JDBC connection or
+  timeout failure (`SQLTransientConnectionException`, `SQLNonTransientConnectionException`,
+  `SQLTimeoutException`) or Spring's `DataAccessResourceFailureException` (incl.
+  `CannotGetJdbcConnectionException`), `TransientDataAccessResourceException`,
+  `QueryTimeoutException`, `CannotCreateTransactionException`, anywhere in the cause chain. It
+  carries `persimmon.ddd.web.unavailable.code` when set and is logged at WARN with class names
+  only. Throw a `DomainException` whose code has `ErrorCategory.UNAVAILABLE` for other
+  dependencies (an upstream API). Every 503 carries `Retry-After`
+  (`persimmon.ddd.web.unavailable.retry-after`, 1s). A `ProblemCustomizer`
   bean adds properties or response headers to every problem detail, the ones Spring MVC writes and
   the ones persimmon filters write before MVC (idempotency answers carry `code`
   `idempotency.key-required`, `.key-too-long`, `.request-too-large`, `.in-progress`, `.result-unknown`, `.key-reused`).
