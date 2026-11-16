@@ -51,7 +51,8 @@ import org.springframework.web.util.ContentCachingResponseWrapper;
  * until its outcome is reconciled; it never permits automatic re-execution. A claim that fails
  * because the store is unavailable is 503 {@code idempotency.unavailable} with {@code Retry-After}.
  * The filter mints each claim's token, so a claim that threw (it may have landed) and a release
- * that failed go to the {@link ReleaseQueue}, which retries them: the request was not handed on. Responses of 429 and 5xx are not stored, so the client
+ * that failed go to the {@link ReleaseQueue}, which retries them: the request was not handed on.
+ * A failure to keep the handler's answer leaves the claim pending and still sends that answer. Responses of 429 and 5xx are not stored, so the client
  * may retry them; a {@link ResponseRetention} bean changes which are.
  */
 public class IdempotencyFilter extends OncePerRequestFilter {
@@ -166,13 +167,28 @@ public class IdempotencyFilter extends OncePerRequestFilter {
       headers.put(HttpHeaders.CONTENT_TYPE, wrapper.getContentType());
     }
     StoredResponse stored = new StoredResponse(wrapper.getStatus(), wrapper.getContentAsByteArray(), headers);
+    record(key, token, stored);
+    try {
+      wrapper.copyBodyToResponse();
+    } catch (IOException | RuntimeException e) {
+      logWriteFailure("executed", stored.status(), e);
+      throw e;
+    }
+  }
+
+  /**
+   * Keeps or releases the handler's answer. A failure to keep it is logged and leaves the claim
+   * pending (in-progress, then result-unknown; a write that did land replays); the client still
+   * gets the handler's answer.
+   */
+  private void record(Key key, String token, StoredResponse stored) {
     boolean retain;
     try {
       retain = retention.retain(stored);
     } catch (RuntimeException e) {
       log.error("event=idempotency_record action=retention outcome=error response_status={} error_type={}",
           stored.status(), e.getClass().getName());
-      throw e;
+      return;
     }
     if (retain) {
       try {
@@ -180,7 +196,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
       } catch (RuntimeException e) {
         log.error("event=idempotency_record action=complete outcome=error response_status={} error_type={}",
             stored.status(), e.getClass().getName());
-        throw e;
+        return;
       }
       log.info("event=idempotency_record action=complete outcome=saved response_status={}", stored.status());
     } else {
@@ -191,12 +207,6 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             stored.status(), e.getClass().getName());
         releases.add(key, token);
       }
-    }
-    try {
-      wrapper.copyBodyToResponse();
-    } catch (IOException | RuntimeException e) {
-      logWriteFailure("executed", stored.status(), e);
-      throw e;
     }
   }
 

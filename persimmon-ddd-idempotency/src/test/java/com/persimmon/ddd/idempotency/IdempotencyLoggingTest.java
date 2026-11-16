@@ -194,7 +194,7 @@ class IdempotencyLoggingTest {
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
-  void completionErrorDoesNotClaimTheDatabaseRolledBackOrSendSuccess(boolean persisted) throws Exception {
+  void completionErrorKeepsTheClaimPendingAndStillSendsTheHandlersAnswer(boolean persisted) throws Exception {
     MybatisIdempotencyStore target = spy(store);
     RuntimeException failure = new IllegalStateException("database-secret", new IOException("cause-secret"));
     doAnswer(call -> {
@@ -202,10 +202,14 @@ class IdempotencyLoggingTest {
       throw failure;
     }).when(target).complete(any(), any(), any(), any());
     MockHttpServletResponse response = new MockHttpServletResponse();
-    assertSame(failure, assertThrows(IllegalStateException.class, () -> invoke(target,
-        ResponseRetention.DEFAULT, request(), response, (r, s) -> s.getWriter().write("body-secret"))));
+    invoke(target, ResponseRetention.DEFAULT, request(), response, (r, s) -> {
+      ((HttpServletResponse) s).setHeader("X-Source", "upstream");
+      s.getWriter().write("body-secret");
+    });
     assertEquals(persisted ? "COMPLETE" : "PENDING", state());
-    assertEquals("", response.getContentAsString());
+    assertEquals(200, response.getStatus());
+    assertEquals("upstream", response.getHeader("X-Source"));
+    assertEquals("body-secret", response.getContentAsString());
     assertMessages("event=idempotency_record action=complete outcome=error response_status=200 error_type=java.lang.IllegalStateException");
     verify(target, never()).abandon(any(), any());
     assertCorrelation();
@@ -256,11 +260,12 @@ class IdempotencyLoggingTest {
   }
 
   @Test
-  void retentionFailureIsNotMisreportedAsAWriteOrDatabaseFailure() {
+  void retentionFailureIsNotMisreportedAsAWriteOrDatabaseFailureAndTheAnswerIsSent() throws Exception {
     RuntimeException failure = new IllegalStateException();
-    assertSame(failure, assertThrows(IllegalStateException.class, () -> invoke(store,
-        ignored -> { throw failure; }, request(), new MockHttpServletResponse(), (r, s) -> {})));
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    invoke(store, ignored -> { throw failure; }, request(), response, (r, s) -> s.getWriter().write("body-secret"));
     assertEquals("PENDING", state());
+    assertEquals("body-secret", response.getContentAsString());
     assertMessages("event=idempotency_record action=retention outcome=error response_status=200 error_type=java.lang.IllegalStateException");
   }
 

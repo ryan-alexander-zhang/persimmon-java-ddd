@@ -200,8 +200,10 @@ ResponseEntity<Void> confirm(@PathVariable String id) {
 `lease` (default 1m) is how long an unfinished request reports `409 idempotency.in-progress`
 with `Retry-After: 1`. After the lease, it reports `409 idempotency.result-unknown` without
 `Retry-After`; neither a retry nor cleanup removes that pending claim, even after 24h. The
-original owner can still save its response after the lease. If execution or response persistence
-throws, the filter does not release the claim or send the buffered success response.
+original owner can still save its response after the lease. If execution throws, the filter
+does not release the claim. If keeping the answer fails (`ResponseRetention` or `complete` throws),
+the claim stays pending (in-progress, then result-unknown; a write that did land replays) and the
+client still gets the handler's answer, never a substitute 500.
 Only a response explicitly rejected by `ResponseRetention`, or a claim that threw, releases the
 pending claim. A claim that fails because the store is unreachable (the same rule as the web
 module's 503) answers `503 idempotency.unavailable` with `Retry-After` before the handler runs; any

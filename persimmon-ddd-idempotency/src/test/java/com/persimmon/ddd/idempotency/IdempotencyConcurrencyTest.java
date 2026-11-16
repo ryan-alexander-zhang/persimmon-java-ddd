@@ -192,12 +192,12 @@ class IdempotencyConcurrencyTest {
   }
 
   @Test
-  void aFailedResponseWriteDoesNotReleaseTheClaimOrSendTheBufferedSuccess() throws Exception {
+  void aFailedResponseWriteDoesNotReleaseTheClaimButStillSendsTheHandlersAnswer() throws Exception {
     MybatisIdempotencyStore failing = spy(a);
     doThrow(new IllegalStateException("database unavailable")).when(failing).complete(any(), any(), any(), any());
     MockHttpServletResponse response = new MockHttpServletResponse();
-    assertThrows(IllegalStateException.class, () -> filter(failing).doFilter(request(), response, (r, s) -> s.getWriter().write("success")));
-    assertEquals("", response.getContentAsString());
+    filter(failing).doFilter(request(), response, (r, s) -> s.getWriter().write("success"));
+    assertEquals("success", response.getContentAsString());
     MockHttpServletResponse retry = new MockHttpServletResponse();
     AtomicInteger executions = new AtomicInteger();
     filter(b).doFilter(request(), retry, (r, s) -> executions.incrementAndGet());
