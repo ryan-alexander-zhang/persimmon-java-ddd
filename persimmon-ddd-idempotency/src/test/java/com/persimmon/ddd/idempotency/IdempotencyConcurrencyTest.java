@@ -25,6 +25,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -94,7 +95,7 @@ class IdempotencyConcurrencyTest {
     if (completed) {
       assertReplay("new");
     } else {
-      assertInstanceOf(Claim.InProgress.class, b.claim(KEY, "fingerprint", LEASE));
+      assertInstanceOf(Claim.InProgress.class, b.claim(KEY, "fingerprint", LEASE, UUID.randomUUID().toString()));
     }
   }
 
@@ -110,11 +111,11 @@ class IdempotencyConcurrencyTest {
   void anUnknownOutcomeRemainsBlockedBeyondTheResponseTtl() {
     won(a);
     clock.advance(LEASE);
-    assertInstanceOf(Claim.OutcomeUnknown.class, b.claim(KEY, "fingerprint", LEASE));
+    assertInstanceOf(Claim.OutcomeUnknown.class, b.claim(KEY, "fingerprint", LEASE, UUID.randomUUID().toString()));
     clock.advance(TTL.plusDays(1));
     assertEquals(0, b.deleteExpired(100));
-    assertInstanceOf(Claim.OutcomeUnknown.class, b.claim(KEY, "fingerprint", LEASE));
-    assertInstanceOf(Claim.Mismatch.class, b.claim(KEY, "different request", LEASE));
+    assertInstanceOf(Claim.OutcomeUnknown.class, b.claim(KEY, "fingerprint", LEASE, UUID.randomUUID().toString()));
+    assertInstanceOf(Claim.Mismatch.class, b.claim(KEY, "different request", LEASE, UUID.randomUUID().toString()));
   }
 
   @ParameterizedTest
@@ -131,7 +132,7 @@ class IdempotencyConcurrencyTest {
       clock.advance(TTL);
       assertEquals(1, b.deleteExpired(100));
     } else {
-      assertInstanceOf(Claim.OutcomeUnknown.class, b.claim(KEY, "fingerprint", LEASE));
+      assertInstanceOf(Claim.OutcomeUnknown.class, b.claim(KEY, "fingerprint", LEASE, UUID.randomUUID().toString()));
       assertEquals(0, b.deleteExpired(100));
     }
   }
@@ -149,7 +150,7 @@ class IdempotencyConcurrencyTest {
     if (completed) {
       assertReplay("new");
     } else {
-      assertInstanceOf(Claim.InProgress.class, b.claim(KEY, "fingerprint", LEASE));
+      assertInstanceOf(Claim.InProgress.class, b.claim(KEY, "fingerprint", LEASE, UUID.randomUUID().toString()));
     }
   }
 
@@ -159,7 +160,7 @@ class IdempotencyConcurrencyTest {
     a.abandon(KEY, old.token());
     won(b);
     a.abandon(KEY, old.token());
-    assertInstanceOf(Claim.InProgress.class, b.claim(KEY, "fingerprint", LEASE));
+    assertInstanceOf(Claim.InProgress.class, b.claim(KEY, "fingerprint", LEASE, UUID.randomUUID().toString()));
   }
 
   @Test
@@ -224,11 +225,11 @@ class IdempotencyConcurrencyTest {
   }
 
   private Claim.Won won(MybatisIdempotencyStore store) {
-    return assertInstanceOf(Claim.Won.class, store.claim(KEY, "fingerprint", LEASE));
+    return assertInstanceOf(Claim.Won.class, store.claim(KEY, "fingerprint", LEASE, UUID.randomUUID().toString()));
   }
 
   private void assertReplay(String body) {
-    Claim.Replay replay = assertInstanceOf(Claim.Replay.class, b.claim(KEY, "fingerprint", LEASE));
+    Claim.Replay replay = assertInstanceOf(Claim.Replay.class, b.claim(KEY, "fingerprint", LEASE, UUID.randomUUID().toString()));
     assertEquals(body, new String(replay.response().body(), StandardCharsets.UTF_8));
   }
 

@@ -126,7 +126,7 @@ class IdempotencyTest {
   void aKeyStillInFlightAnswersConflictAndAFailedRequestCanBeRetried() throws Exception {
     MessageDigest digest = MessageDigest.getInstance("SHA-256");
     digest.update("POST\n/payments\nnull\napplication/json\n{\"amount\":10}".getBytes(StandardCharsets.UTF_8));
-    store.claim(new IdempotencyStore.Key("__root__", "", "k-busy"), HexFormat.of().formatHex(digest.digest()), Duration.ofMinutes(1));
+    store.claim(new IdempotencyStore.Key("__root__", "", "k-busy"), HexFormat.of().formatHex(digest.digest()), Duration.ofMinutes(1), "token");
     mvc.perform(pay("k-busy", "{\"amount\":10}"))
         .andExpect(status().isConflict())
         .andExpect(header().string("Retry-After", "1"))
@@ -158,7 +158,7 @@ class IdempotencyTest {
   @Test
   void expiredResponsesArePurged() {
     var key = new IdempotencyStore.Key("__root__", "", "old");
-    var claim = assertInstanceOf(IdempotencyStore.Claim.Won.class, store.claim(key, "x", Duration.ofMinutes(1)));
+    var claim = assertInstanceOf(IdempotencyStore.Claim.Won.class, store.claim(key, "x", Duration.ofMinutes(1), "token"));
     store.complete(key, claim.token(), new IdempotencyStore.StoredResponse(200, new byte[0], Map.of()), Duration.ofMinutes(-1));
     assertEquals(1, store.deleteExpired(100));
     assertEquals(0, store.deleteExpired(100));

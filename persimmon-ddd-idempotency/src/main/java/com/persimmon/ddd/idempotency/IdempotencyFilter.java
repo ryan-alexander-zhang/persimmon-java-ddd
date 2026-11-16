@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -48,7 +49,9 @@ import org.springframework.web.util.ContentCachingResponseWrapper;
  * request under the same key is 422; a retry
  * while the first is still running is 409. An expired pending claim returns 409 result-unknown
  * until its outcome is reconciled; it never permits automatic re-execution. A claim that fails
- * because the store is unavailable is 503 {@code idempotency.unavailable} with {@code Retry-After}. Responses of 429 and 5xx are not stored, so the client
+ * because the store is unavailable is 503 {@code idempotency.unavailable} with {@code Retry-After}.
+ * The filter mints each claim's token, so a claim that threw (it may have landed) and a release
+ * that failed go to the {@link ReleaseQueue}, which retries them: the request was not handed on. Responses of 429 and 5xx are not stored, so the client
  * may retry them; a {@link ResponseRetention} bean changes which are.
  */
 public class IdempotencyFilter extends OncePerRequestFilter {
@@ -66,15 +69,19 @@ public class IdempotencyFilter extends OncePerRequestFilter {
   private final List<String> fingerprintHeaders;
   private final List<String> keyScopeHeaders;
   private final UnavailableDependencies unavailable;
+  private final ReleaseQueue releases;
 
+  /** JDBC unavailability only, 1s {@code Retry-After}; nothing drains its {@link ReleaseQueue}. */
   public IdempotencyFilter(IdempotencyStore store, IdempotencyProperties properties, ObjectMapper json, ResponseRetention retention,
       List<ProblemCustomizer> customizers) {
-    this(store, properties, json, retention, customizers, new UnavailableDependencies(t -> false, t -> null, Duration.ofSeconds(1)));
+    this(store, properties, json, retention, customizers, new UnavailableDependencies(t -> false, t -> null, Duration.ofSeconds(1)),
+        new ReleaseQueue(store));
   }
 
   public IdempotencyFilter(IdempotencyStore store, IdempotencyProperties properties, ObjectMapper json, ResponseRetention retention,
-      List<ProblemCustomizer> customizers, UnavailableDependencies unavailable) {
+      List<ProblemCustomizer> customizers, UnavailableDependencies unavailable, ReleaseQueue releases) {
     this.unavailable = unavailable;
+    this.releases = releases;
     this.store = store;
     this.properties = properties;
     this.json = json;
@@ -113,10 +120,12 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     String principal = request.getUserPrincipal() == null ? "" : request.getUserPrincipal().getName();
     Key key = new Key(TenantContext.effective().value(), scoped(principal, request), rawKey);
     String fingerprint = fingerprint(buffered);
+    String token = UUID.randomUUID().toString();
     Claim claim;
     try {
-      claim = store.claim(key, fingerprint, properties.lease());
+      claim = store.claim(key, fingerprint, properties.lease(), token);
     } catch (RuntimeException e) {
+      releases.add(key, token);
       Throwable cause = unavailable.cause(e);
       if (cause == null) {
         log.error("event=idempotency_decision outcome=error stage=claim error_type={}", e.getClass().getName());
@@ -180,6 +189,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
       } catch (RuntimeException e) {
         log.warn("event=idempotency_record action=release outcome=error response_status={} error_type={}",
             stored.status(), e.getClass().getName());
+        releases.add(key, token);
       }
     }
     try {

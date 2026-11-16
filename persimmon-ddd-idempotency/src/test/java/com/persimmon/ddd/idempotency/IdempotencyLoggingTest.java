@@ -111,7 +111,7 @@ class IdempotencyLoggingTest {
   @MethodSource("refusals")
   void refusalsExplainWhyBusinessDidNotRun(Claim claim, int status, String code, String retryAfter) throws Exception {
     IdempotencyStore target = mock(IdempotencyStore.class);
-    when(target.claim(any(), any(), any())).thenReturn(claim);
+    when(target.claim(any(), any(), any(), any())).thenReturn(claim);
     MockHttpServletResponse response = new MockHttpServletResponse();
     invoke(target, ResponseRetention.DEFAULT, request(), response, (r, s) -> fail("must not execute"));
     assertEquals(status, response.getStatus());
@@ -157,7 +157,7 @@ class IdempotencyLoggingTest {
   @Test
   void replayIsIdentifiedWithoutExecutingOrChangingTheStoredResponse() throws Exception {
     IdempotencyStore target = mock(IdempotencyStore.class);
-    when(target.claim(any(), any(), any())).thenReturn(new Claim.Replay(stored()));
+    when(target.claim(any(), any(), any(), any())).thenReturn(new Claim.Replay(stored()));
     MockHttpServletResponse response = new MockHttpServletResponse();
     invoke(target, ResponseRetention.DEFAULT, request(), response, (r, s) -> fail("must not execute"));
     assertEquals(202, response.getStatus());
@@ -171,7 +171,7 @@ class IdempotencyLoggingTest {
   void claimFailureIsCorrelatedAndTheSameExceptionEscapes() {
     IdempotencyStore target = mock(IdempotencyStore.class);
     RuntimeException failure = new IllegalStateException();
-    when(target.claim(any(), any(), any())).thenThrow(failure);
+    when(target.claim(any(), any(), any(), any())).thenThrow(failure);
     assertSame(failure, assertThrows(IllegalStateException.class, () -> invoke(target,
         ResponseRetention.DEFAULT, request(), new MockHttpServletResponse(), (r, s) -> fail("must not execute"))));
     assertMessages("event=idempotency_decision outcome=error stage=claim error_type=java.lang.IllegalStateException");
@@ -229,7 +229,7 @@ class IdempotencyLoggingTest {
 
   @Test
   void releaseWithNoMatchingOwnershipDoesNotClaimSuccessOrDeleteTheOwner() {
-    store.claim(KEY, "fingerprint-secret", LEASE);
+    store.claim(KEY, "fingerprint-secret", LEASE, "token");
     store.abandon(KEY, "wrong-token-secret");
     assertEquals("PENDING", state());
     assertMessages("event=idempotency_record action=release outcome=not_matched affected_rows=0");
@@ -284,7 +284,7 @@ class IdempotencyLoggingTest {
     IdempotencyStore target = store;
     if (!source.equals("executed")) {
       target = mock(IdempotencyStore.class);
-      when(target.claim(any(), any(), any())).thenReturn(source.equals("replay")
+      when(target.claim(any(), any(), any(), any())).thenReturn(source.equals("replay")
           ? new Claim.Replay(stored()) : new Claim.InProgress());
     }
     IdempotencyStore chosen = target;

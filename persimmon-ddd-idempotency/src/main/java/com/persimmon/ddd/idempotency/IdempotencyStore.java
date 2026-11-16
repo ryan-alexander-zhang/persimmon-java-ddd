@@ -21,8 +21,12 @@ public interface IdempotencyStore {
     record Replay(StoredResponse response) implements Claim {}
   }
 
-  /** Takes an unused key; an expired pending lease has an unknown outcome and cannot be retaken. */
-  Claim claim(Key key, String fingerprint, Duration lease);
+  /**
+   * Takes an unused key under the caller's {@code token}, which {@link Claim.Won} returns; an
+   * expired pending lease has an unknown outcome and cannot be retaken. The caller mints the token
+   * so it can release a claim whose acknowledgement was lost.
+   */
+  Claim claim(Key key, String fingerprint, Duration lease, String token);
 
   /** Saves the owning claim's response, even after its lease; throws if ownership was lost. */
   void complete(Key key, String token, StoredResponse response, Duration ttl);

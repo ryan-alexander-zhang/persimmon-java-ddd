@@ -202,10 +202,17 @@ with `Retry-After: 1`. After the lease, it reports `409 idempotency.result-unkno
 `Retry-After`; neither a retry nor cleanup removes that pending claim, even after 24h. The
 original owner can still save its response after the lease. If execution or response persistence
 throws, the filter does not release the claim or send the buffered success response.
-Only a response explicitly rejected by `ResponseRetention` releases the pending claim.
-A claim that fails because the store is unreachable (the same rule as the web module's 503) answers
-`503 idempotency.unavailable` with `Retry-After` before the handler runs; any other claim failure
-escapes as before.
+Only a response explicitly rejected by `ResponseRetention`, or a claim that threw, releases the
+pending claim. A claim that fails because the store is unreachable (the same rule as the web
+module's 503) answers `503 idempotency.unavailable` with `Retry-After` before the handler runs; any
+other claim failure escapes as before.
+
+The filter mints each claim's token, so a claim that threw (its row may have landed after all)
+and a release that failed are queued and retried every `persimmon.ddd.idempotency.release-delay`
+(1s) until the store answers; the request was never handed on, and a release that matches no
+pending row with that token deletes nothing. The queue is in memory: a release still queued when
+the process stops is lost, and that key stays pending as above. `IdempotencyStore.claim` takes the
+token as its fourth argument; a custom store stores it.
 
 Idempotency logs use the existing request-id/trace context:
 
@@ -215,7 +222,8 @@ Idempotency logs use the existing request-id/trace context:
   (`not_owned`), or release's actual affected rows (`released` / `not_matched`). The MyBatis store
   reports release counts; a custom store must report its own result because `abandon` returns void.
   Errors identify `retention`, `complete`, or `release`; an operation error does not prove that
-  the database was unchanged, and a release error no longer asserts that retries remain blocked.
+  the database was unchanged; a failed release is queued, and a failed retry of it is logged with
+  `stage=retry` and the queue's size.
 - `idempotency_response_write`: failures while copying an executed response, replaying a stored
   response, or writing a problem. `response_status` is the selected status, not proof of receipt.
 

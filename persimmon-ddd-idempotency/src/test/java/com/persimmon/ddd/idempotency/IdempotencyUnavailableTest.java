@@ -48,7 +48,7 @@ class IdempotencyUnavailableTest {
     IdempotencyStore store() {
       return new IdempotencyStore() {
         @Override
-        public Claim claim(Key key, String fingerprint, Duration lease) {
+        public Claim claim(Key key, String fingerprint, Duration lease, String token) {
           if (key.value().equals("down")) {
             throw new RuntimeException("mapper failed", new CannotGetJdbcConnectionException("password=secret",
                 new SQLTransientConnectionException("HikariPool-1 - Connection is not available, request timed out")));

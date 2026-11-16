@@ -10,7 +10,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
@@ -31,14 +30,15 @@ public class MybatisIdempotencyStore implements IdempotencyStore {
   }
 
   @Override
-  public Claim claim(Key key, String fingerprint, Duration lease) {
+  public Claim claim(Key key, String fingerprint, Duration lease, String token) {
+    Objects.requireNonNull(token, "claim token");
     Instant now = clock.instant();
     mapper.delete(where(key).eq("state", "COMPLETE").le("expires_at", now));
     IdempotencyRecord row = new IdempotencyRecord();
     row.setTenantId(key.tenant());
     row.setPrincipal(key.principal());
     row.setIdempotencyKey(key.value());
-    row.setClaimToken(UUID.randomUUID().toString());
+    row.setClaimToken(token);
     row.setFingerprint(fingerprint);
     row.setState("PENDING");
     row.setCreatedAt(now);

@@ -46,13 +46,18 @@ public class IdempotencyAutoConfiguration {
   @ConditionalOnMissingBean(name = "persimmonIdempotencyFilter")
   public FilterRegistrationBean<IdempotencyFilter> persimmonIdempotencyFilter(
       IdempotencyStore store, IdempotencyProperties properties, ObjectProvider<ObjectMapper> json, ObjectProvider<ResponseRetention> retention,
-      ObjectProvider<ProblemCustomizer> customizers, ObjectProvider<UnavailableDependencies> unavailable) {
+      ObjectProvider<ProblemCustomizer> customizers, ObjectProvider<UnavailableDependencies> unavailable, ReleaseQueue releases) {
     FilterRegistrationBean<IdempotencyFilter> registration = new FilterRegistrationBean<>(new IdempotencyFilter(
         store, properties, json.getIfAvailable(ObjectMapper::new), retention.getIfAvailable(() -> ResponseRetention.DEFAULT),
         customizers.orderedStream().toList(),
-        unavailable.getIfAvailable(() -> new UnavailableDependencies(t -> false, t -> null, Duration.ofSeconds(1)))));
+        unavailable.getIfAvailable(() -> new UnavailableDependencies(t -> false, t -> null, Duration.ofSeconds(1))), releases));
     registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 40);
     return registration;
+  }
+
+  @Bean
+  public ReleaseQueue persimmonIdempotencyReleases(IdempotencyStore store) {
+    return new ReleaseQueue(store);
   }
 
   @Bean
